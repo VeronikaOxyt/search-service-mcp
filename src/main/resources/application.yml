@@ -1,0 +1,15 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: search-engine-mcp
+  ai:
+    mcp:
+      server:
+        name: search-engine-mcp
+        version: 0.0.1
+        type: SYNC
+        instructions: >
+          This server exposes read-only tools for exploring datasets through a
+          safe structured query model. It never accepts raw SQL.
