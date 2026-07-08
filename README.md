@@ -9,6 +9,7 @@ existing backend query builder or REST API.
 
 ## Tools
 
+- `listSearchServiceSources` - lists data sources exposed by the search service topology.
 - `listDatasets` - lists datasets visible to the user.
 - `describeDataset` - returns fields, allowed filters, grouping, sorting, and metrics.
 - `getFilterValues` - returns dictionary values for filter controls.
@@ -21,6 +22,21 @@ mvn spring-boot:run
 ```
 
 The app listens on port `8081`.
+
+By default, the MCP server expects the search service backend at
+`http://localhost:8080`. Override it with:
+
+```bash
+mvn spring-boot:run -Dspring-boot.run.arguments=--search-service.base-url=http://localhost:8080
+```
+
+The first real backend-backed MCP tool calls:
+
+```http
+GET /topology/sources
+```
+
+and exposes the result to AI clients through `listSearchServiceSources`.
 
 ## Example Query Payload
 

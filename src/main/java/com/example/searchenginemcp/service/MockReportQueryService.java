@@ -212,12 +212,29 @@ public class MockReportQueryService implements ReportQueryService {
 
     private List<Map<String, Object>> projectRows(List<Map<String, Object>> rows) {
         return rows.stream()
-                .map(LinkedHashMap::new)
                 .map(row -> {
-                    row.remove("id");
-                    return row;
+                    Map<String, Object> projectedRow = new LinkedHashMap<>(row);
+                    projectedRow.remove("id");
+                    return projectedRow;
                 })
                 .toList();
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private int compareSortValues(Object left, Object right) {
+        if (left == null && right == null) {
+            return 0;
+        }
+        if (left == null) {
+            return 1;
+        }
+        if (right == null) {
+            return -1;
+        }
+        if (left instanceof Comparable comparable) {
+            return comparable.compareTo(right);
+        }
+        return String.valueOf(left).compareTo(String.valueOf(right));
     }
 
     private List<Map<String, Object>> sortRows(List<Map<String, Object>> rows, List<Sort> sorts) {
@@ -227,10 +244,8 @@ public class MockReportQueryService implements ReportQueryService {
 
         Comparator<Map<String, Object>> comparator = null;
         for (Sort sort : sorts) {
-            Comparator<Map<String, Object>> fieldComparator = Comparator.comparing(
-                    row -> (Comparable<?>) row.get(sort.field()),
-                    Comparator.nullsLast(Comparator.naturalOrder())
-            );
+            Comparator<Map<String, Object>> fieldComparator = (left, right) ->
+                    compareSortValues(left.get(sort.field()), right.get(sort.field()));
             if (sort.direction() == SortDirection.DESC) {
                 fieldComparator = fieldComparator.reversed();
             }

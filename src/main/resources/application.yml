@@ -13,3 +13,6 @@ spring:
         instructions: >
           This server exposes read-only tools for exploring datasets through a
           safe structured query model. It never accepts raw SQL.
+
+search-service:
+  base-url: http://localhost:8080

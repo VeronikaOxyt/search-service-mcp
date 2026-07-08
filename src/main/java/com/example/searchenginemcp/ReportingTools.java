@@ -5,8 +5,10 @@ import com.example.searchenginemcp.dto.DatasetSummary;
 import com.example.searchenginemcp.dto.FilterValue;
 import com.example.searchenginemcp.dto.QueryRequest;
 import com.example.searchenginemcp.dto.QueryResult;
+import com.example.searchenginemcp.dto.TopologySourcesResponse;
 import com.example.searchenginemcp.service.DatasetCatalogService;
 import com.example.searchenginemcp.service.ReportQueryService;
+import com.example.searchenginemcp.service.SearchServiceTopologyClient;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.ai.tool.annotation.Tool;
@@ -20,10 +22,22 @@ public class ReportingTools {
 
     private final DatasetCatalogService catalogService;
     private final ReportQueryService queryService;
+    private final SearchServiceTopologyClient topologyClient;
 
-    public ReportingTools(DatasetCatalogService catalogService, ReportQueryService queryService) {
+    public ReportingTools(DatasetCatalogService catalogService,
+                          ReportQueryService queryService,
+                          SearchServiceTopologyClient topologyClient) {
         this.catalogService = catalogService;
         this.queryService = queryService;
+        this.topologyClient = topologyClient;
+    }
+
+    @Tool(description = """
+            Lists data sources available in the search service topology.
+            Use this when the user asks which data storages, repositories, or sources are available.
+            """)
+    public TopologySourcesResponse listSearchServiceSources() {
+        return topologyClient.getSources();
     }
 
     @Tool(description = "Lists datasets available to the current user.")
