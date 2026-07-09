@@ -1,8 +1,8 @@
 package com.example.searchenginemcp.service;
 
-import com.example.searchenginemcp.dto.TopologySourcesResponse;
+import com.example.searchenginemcp.dto.AvailableSourcesResult;
 
 public interface SearchServiceTopologyClient {
 
-    TopologySourcesResponse getSources();
+    AvailableSourcesResult getSources();
 }

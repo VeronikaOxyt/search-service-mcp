@@ -1,19 +1,19 @@
 # Search Engine MCP
 
-Demo Spring Boot MCP server for a web application where users build read-only
-data queries through UI filters, sorting, grouping, metrics, and limits.
+Spring Boot MCP server for exposing search service topology sources to AI clients.
 
-The server intentionally accepts a structured query model instead of raw SQL.
-In a real project, the mock services should be replaced with calls to the
-existing backend query builder or REST API.
+The server calls the existing backend endpoint:
 
-## Tools
+```http
+GET /topology/sources
+```
 
-- `listSearchServiceSources` - lists data sources exposed by the search service topology.
-- `listDatasets` - lists datasets visible to the user.
-- `describeDataset` - returns fields, allowed filters, grouping, sorting, and metrics.
-- `getFilterValues` - returns dictionary values for filter controls.
-- `runQuery` - executes a read-only structured query.
+and exposes the result through one MCP tool:
+
+- `listSearchServiceSources` - lists data sources available in the search service topology.
+
+The MCP response intentionally omits backend `status` and `timestamp` fields and
+returns only the source list that is useful for an AI answer.
 
 ## Run
 
@@ -21,64 +21,21 @@ existing backend query builder or REST API.
 mvn spring-boot:run
 ```
 
-The app listens on port `8081`.
+The MCP server listens on port `8081`.
 
-By default, the MCP server expects the search service backend at
-`http://localhost:8080`. Override it with:
+By default, it expects the search service backend at `http://localhost:8080`.
+Override it with:
 
 ```bash
 mvn spring-boot:run -Dspring-boot.run.arguments=--search-service.base-url=http://localhost:8080
 ```
 
-The first real backend-backed MCP tool calls:
+## Current Shape
 
-```http
-GET /topology/sources
+```text
+AI client
+  -> MCP tool listSearchServiceSources
+    -> HttpSearchServiceTopologyClient
+      -> GET /topology/sources
+        -> search service backend
 ```
-
-and exposes the result to AI clients through `listSearchServiceSources`.
-
-## Example Query Payload
-
-```json
-{
-  "datasetId": "sales_orders",
-  "filters": [
-    {
-      "field": "status",
-      "operator": "EQ",
-      "value": "PAID"
-    },
-    {
-      "field": "orderDate",
-      "operator": "BETWEEN",
-      "value": ["2026-06-01", "2026-06-30"]
-    }
-  ],
-  "groupBy": ["region"],
-  "metrics": [
-    {
-      "field": "amount",
-      "aggregation": "SUM"
-    }
-  ],
-  "sort": [
-    {
-      "field": "amount_sum",
-      "direction": "DESC"
-    }
-  ],
-  "limit": 10
-}
-```
-
-## Production Shape
-
-Replace `MockDatasetCatalogService` and `MockReportQueryService` with adapters to
-your real Spring Boot backend:
-
-- reuse existing authorization and dataset permissions;
-- expose only approved datasets and fields;
-- keep query execution read-only;
-- enforce server-side limits;
-- audit every tool call.

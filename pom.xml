@@ -15,7 +15,7 @@
     <artifactId>search-engine-mcp</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>search-engine-mcp</name>
-    <description>MCP server for semantic data exploration</description>
+    <description>MCP server for search service topology sources</description>
 
     <properties>
         <java.version>21</java.version>
@@ -42,15 +42,6 @@
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-mcp-server-webmvc</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-validation</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
         </dependency>
     </dependencies>
 
