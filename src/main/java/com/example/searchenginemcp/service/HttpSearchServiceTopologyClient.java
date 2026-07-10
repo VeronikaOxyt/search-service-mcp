@@ -18,7 +18,7 @@ public class HttpSearchServiceTopologyClient implements SearchServiceTopologyCli
     @Override
     public AvailableSourcesResult getSources() {
         TopologySourcesResponse response = restClient.get()
-                .uri("/topology/sources")
+                .uri("/query/topology/sources")
                 .retrieve()
                 .body(TopologySourcesResponse.class);
 

@@ -10,9 +10,12 @@ spring:
         name: search-engine-mcp
         version: 0.0.1
         type: SYNC
+        sse-endpoint: /sse
+        sse-message-endpoint: /mcp/message
         instructions: >
-          This server exposes read-only tools for exploring datasets through a
-          safe structured query model. It never accepts raw SQL.
+          This server exposes a read-only tool for listing search service
+          topology data sources. It calls the search service backend and returns
+          an AI-oriented response without backend status metadata.
 
 search-service:
   base-url: http://localhost:8080
