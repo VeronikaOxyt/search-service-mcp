@@ -8,9 +8,23 @@ The server calls the existing backend endpoint:
 GET /query/topology/sources
 ```
 
-and exposes the result through one MCP tool:
+and exposes the result through MCP tools.
+
+Topology tool:
 
 - `listSearchServiceSources` - lists data sources available in the search service topology.
+
+Saved-query template tools:
+
+- `listQueryTemplates` - lists personal or shared templates;
+- `getQueryTemplateParameters` - returns the typed execution schema for one template;
+- `executeQueryTemplate` - starts asynchronous execution using a template ID, version, and parameter values;
+- `getQueryStatus` - checks an asynchronous execution;
+- `getQueryResult` - returns a bounded page of table rows.
+
+Templates are backend data, not dynamically registered MCP tools. A template created
+in the web application is therefore available through `listQueryTemplates` without
+restarting or redeploying this MCP server.
 
 The MCP response intentionally omits backend `status` and `timestamp` fields and
 returns only the source list that is useful for an AI answer.
@@ -65,8 +79,25 @@ mvn spring-boot:run -Dspring-boot.run.arguments=--search-service.base-url=http:/
 
 ```text
 AI client
-  -> MCP tool listSearchServiceSources
-    -> HttpSearchServiceTopologyClient
-      -> GET /query/topology/sources
+  -> ReportingTools / TemplateTools
+    -> SearchServiceTopologyClient / TemplateExecutionService
+      -> HttpSearchServiceTopologyClient / HttpTemplateBackendClient
         -> search service backend
 ```
+
+## Template Backend Contract
+
+The initial template implementation assumes these backend endpoints:
+
+```text
+POST /mid/template/list
+GET  /mid/template/{templateId}/execution-schema
+POST /mid/template/{templateId}/execute
+GET  /mid/query/{executionId}/status
+GET  /mid/query/{executionId}/result?offset=0&limit=20
+```
+
+The list endpoint is the existing endpoint. The remaining paths describe the
+expected backend extension and can be adjusted when its final API is agreed.
+See [`docs/template-tools.md`](docs/template-tools.md) for request and response
+examples and the complete MCP execution flow.

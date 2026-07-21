@@ -13,9 +13,10 @@ spring:
         sse-endpoint: /sse
         sse-message-endpoint: /mcp/message
         instructions: >
-          This server exposes a read-only tool for listing search service
-          topology data sources. It calls the search service backend and returns
-          an AI-oriented response without backend status metadata.
+          This server exposes search service topology sources and saved query
+          templates. Find a template, inspect its required parameters, start
+          asynchronous execution, check its status, and fetch a limited page of
+          table rows. Do not invent template IDs or parameter keys.
 
 search-service:
   base-url: http://localhost:8080

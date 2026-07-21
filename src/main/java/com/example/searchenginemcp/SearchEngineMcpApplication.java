@@ -16,9 +16,11 @@ public class SearchEngineMcpApplication {
     }
 
     @Bean
-    ToolCallbackProvider reportingToolCallbacks(ReportingTools reportingTools) {
+    ToolCallbackProvider toolCallbacks(
+            ReportingTools reportingTools,
+            TemplateTools templateTools) {
         return MethodToolCallbackProvider.builder()
-                .toolObjects(reportingTools)
+                .toolObjects(reportingTools, templateTools)
                 .build();
     }
 
