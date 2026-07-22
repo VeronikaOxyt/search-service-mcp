@@ -8,5 +8,6 @@ public record TemplateExecutionSchema(
         long version,
         String name,
         String description,
+        QueryType queryType,
         List<TemplateParameter> parameters) {
 }

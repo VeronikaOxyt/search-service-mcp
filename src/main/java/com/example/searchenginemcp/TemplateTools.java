@@ -2,7 +2,7 @@ package com.example.searchenginemcp;
 
 import com.example.searchenginemcp.dto.template.QueryExecution;
 import com.example.searchenginemcp.dto.template.QueryResult;
-import com.example.searchenginemcp.dto.template.QueryStatus;
+import com.example.searchenginemcp.dto.template.QueryType;
 import com.example.searchenginemcp.dto.template.TemplateExecutionSchema;
 import com.example.searchenginemcp.dto.template.TemplateListResult;
 import com.example.searchenginemcp.service.TemplateExecutionService;
@@ -59,7 +59,7 @@ public class TemplateTools {
             Get the parameter schema first and supply every required parameter.
             DATE values use YYYY-MM-DD, DATETIME values use ISO-8601,
             and parameters marked multiple are passed as arrays.
-            The result contains an execution ID; use getQueryStatus and getQueryResult next.
+            The result contains resultId and queryType; pass both to getQueryResult.
             """)
     public QueryExecution executeQueryTemplate(
             @ToolParam(description = "UUID of the saved query template.")
@@ -72,23 +72,17 @@ public class TemplateTools {
     }
 
     @Tool(description = """
-            Returns the current status of an asynchronously executed query.
-            Fetch the result only when the status is COMPLETED.
-            """)
-    public QueryStatus getQueryStatus(
-            @ToolParam(description = "Execution UUID returned by executeQueryTemplate.")
-            UUID executionId) {
-        return templateService.getStatus(executionId);
-    }
-
-    @Tool(description = """
-            Returns one page of table rows for a completed query execution.
+            Checks an asynchronous query and returns one page when it is ready.
+            State PENDING means the backend returned HTTP 425 or 426; call this tool again later.
+            State READY contains the result rows.
             At most 100 rows can be returned in one call.
-            Use totalRows and truncated to tell the user when more rows exist.
+            Use metaInfo.count and truncated to tell the user when more rows exist.
             """)
     public QueryResult getQueryResult(
-            @ToolParam(description = "Execution UUID returned by executeQueryTemplate.")
-            UUID executionId,
+            @ToolParam(description = "Result UUID returned by executeQueryTemplate.")
+            UUID resultId,
+            @ToolParam(description = "QUERY or CROSS, returned by executeQueryTemplate.")
+            QueryType queryType,
             @ToolParam(
                     description = "Zero-based row offset. Defaults to 0.",
                     required = false)
@@ -97,6 +91,6 @@ public class TemplateTools {
                     description = "Number of rows to return, from 1 to 100. Defaults to 20.",
                     required = false)
             Integer limit) {
-        return templateService.getResult(executionId, offset, limit);
+        return templateService.getResult(resultId, queryType, offset, limit);
     }
 }

@@ -1,12 +1,19 @@
 package com.example.searchenginemcp.service;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.example.searchenginemcp.dto.template.ExecuteTemplateRequest;
 import com.example.searchenginemcp.dto.template.QueryExecution;
 import com.example.searchenginemcp.dto.template.QueryResult;
-import com.example.searchenginemcp.dto.template.QueryStatus;
+import com.example.searchenginemcp.dto.template.QueryResultMeta;
+import com.example.searchenginemcp.dto.template.QueryResultRequest;
+import com.example.searchenginemcp.dto.template.QueryResultState;
+import com.example.searchenginemcp.dto.template.QueryType;
+import com.example.searchenginemcp.dto.template.ResultColumn;
 import com.example.searchenginemcp.dto.template.TemplateExecutionSchema;
 import com.example.searchenginemcp.dto.template.TemplateListRequest;
 import com.example.searchenginemcp.dto.template.TemplateListResponse;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -47,22 +54,127 @@ public class HttpTemplateBackendClient implements TemplateBackendClient {
     }
 
     @Override
-    public QueryStatus getQueryStatus(UUID executionId) {
-        return restClient.get()
-                .uri("/mid/query/{executionId}/status", executionId)
-                .retrieve()
-                .body(QueryStatus.class);
+    public QueryResult getQueryResult(UUID resultId, QueryType queryType, int offset, int limit) {
+        QueryResultRequest request = new QueryResultRequest(limit, offset, resultId);
+        String path = switch (queryType) {
+            case QUERY -> "/mid/query/result";
+            case CROSS -> "/mid/query/crossResult";
+        };
+
+        return restClient.post()
+                .uri(path)
+                .body(request)
+                .exchange((httpRequest, response) -> {
+                    int httpStatus = response.getStatusCode().value();
+                    if (httpStatus != 200 && httpStatus != 425 && httpStatus != 426) {
+                        String responseBody = response.bodyTo(String.class);
+                        throw new IllegalStateException(
+                                "Query result backend returned HTTP %d: %s"
+                                        .formatted(httpStatus, responseBody));
+                    }
+
+                    BackendResultResponse body = queryType == QueryType.QUERY
+                            ? response.bodyTo(QueryResponse.class)
+                            : response.bodyTo(CrossQueryResponse.class);
+                    if (body == null) {
+                        throw new IllegalStateException("Query result backend returned an empty response");
+                    }
+                    return toQueryResult(resultId, queryType, offset, httpStatus, body);
+                });
     }
 
-    @Override
-    public QueryResult getQueryResult(UUID executionId, int offset, int limit) {
-        return restClient.get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/mid/query/{executionId}/result")
-                        .queryParam("offset", offset)
-                        .queryParam("limit", limit)
-                        .build(executionId))
-                .retrieve()
-                .body(QueryResult.class);
+    private static QueryResult toQueryResult(
+            UUID resultId,
+            QueryType queryType,
+            int offset,
+            int httpStatus,
+            BackendResultResponse response) {
+        BackendResultPayload payload = response.payload();
+        BackendMetaInfo backendMeta = payload == null ? null : payload.metaInfo();
+        QueryResultMeta meta = toMeta(backendMeta);
+        List<Map<String, Object>> rows = payload == null || payload.resultData() == null
+                ? List.of()
+                : payload.resultData();
+        boolean ready = httpStatus == 200;
+        long totalRows = meta == null ? 0 : meta.count();
+
+        return new QueryResult(
+                resultId,
+                queryType,
+                ready ? QueryResultState.READY : QueryResultState.PENDING,
+                httpStatus,
+                response.message(),
+                meta,
+                ready ? rows : List.of(),
+                offset,
+                ready ? rows.size() : 0,
+                ready && totalRows > (long) offset + rows.size());
+    }
+
+    private static QueryResultMeta toMeta(BackendMetaInfo meta) {
+        if (meta == null) {
+            return null;
+        }
+        return new QueryResultMeta(
+                meta.baseColumns() == null ? List.of() : meta.baseColumns(),
+                meta.sourceName(),
+                meta.status(),
+                meta.count() == null ? 0 : meta.count(),
+                meta.progress(),
+                meta.completedCount(),
+                meta.failedCount(),
+                meta.allCount(),
+                meta.columns() == null ? List.of() : meta.columns());
+    }
+
+    private interface BackendResultResponse {
+        String message();
+
+        BackendResultPayload payload();
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record QueryResponse(
+            int status,
+            String timestamp,
+            String message,
+            BackendResultPayload result) implements BackendResultResponse {
+
+        @Override
+        public BackendResultPayload payload() {
+            return result;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record CrossQueryResponse(
+            int status,
+            String timestamp,
+            String message,
+            BackendResultPayload crossResult) implements BackendResultResponse {
+
+        @Override
+        public BackendResultPayload payload() {
+            return crossResult;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record BackendResultPayload(
+            BackendMetaInfo metaInfo,
+            List<Map<String, Object>> resultData) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record BackendMetaInfo(
+            List<String> baseColumns,
+            String sourceName,
+            String status,
+            Long count,
+            Integer progress,
+            Integer completedCount,
+            Integer failedCount,
+            Integer allCount,
+            List<ResultColumn> columns) {
     }
 }

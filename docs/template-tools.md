@@ -9,7 +9,6 @@ that discover and execute them:
 listQueryTemplates
 getQueryTemplateParameters
 executeQueryTemplate
-getQueryStatus
 getQueryResult
 ```
 
@@ -53,6 +52,7 @@ GET /mid/template/{templateId}/execution-schema
   "version": 3,
   "name": "User events",
   "description": "Find events for a user",
+  "queryType": "QUERY",
   "parameters": [
     {
       "key": "username",
@@ -100,8 +100,9 @@ POST /mid/template/{templateId}/execute
 
 ```json
 {
-  "executionId": "06a02258-736f-4ad6-a2e0-4259c66c8fe6",
+  "resultId": "06a02258-736f-4ad6-a2e0-4259c66c8fe6",
   "templateId": "92de4773-7a00-4000-8000-000000000000",
+  "queryType": "QUERY",
   "status": "QUEUED",
   "message": null
 }
@@ -109,43 +110,58 @@ POST /mid/template/{templateId}/execute
 
 The MCP server checks the template version, required keys, and unknown keys. The
 backend remains the authoritative validator for value types, permissions, locked
-filters, and query semantics.
+filters, and query semantics. The MCP server takes `queryType` from the execution
+schema rather than keeping it in process memory.
 
-### Poll status
+### Check readiness and fetch a bounded result page
 
-```http
-GET /mid/query/{executionId}/status
-```
-
-Expected status values are `QUEUED`, `RUNNING`, `COMPLETED`, `FAILED`, and
-`CANCELLED`.
-
-### Fetch a bounded result page
+For `queryType: QUERY`:
 
 ```http
-GET /mid/query/{executionId}/result?offset=0&limit=20
+POST /mid/query/result
 ```
+
+For `queryType: CROSS`:
+
+```http
+POST /mid/query/crossResult
+```
+
+Both endpoints receive the same body:
 
 ```json
 {
-  "executionId": "06a02258-736f-4ad6-a2e0-4259c66c8fe6",
-  "columns": [
-    {
-      "name": "Username",
-      "type": "STRING"
-    }
-  ],
+  "limit": 20,
+  "offset": 0,
+  "resultId": "06a02258-736f-4ad6-a2e0-4259c66c8fe6"
+}
+```
+
+The MCP response for HTTP 425 or 426 has `state: PENDING` and contains available
+progress metadata. The response for HTTP 200 has `state: READY`:
+
+```json
+{
+  "resultId": "06a02258-736f-4ad6-a2e0-4259c66c8fe6",
+  "queryType": "QUERY",
+  "state": "READY",
+  "backendStatus": 200,
+  "metaInfo": {
+    "status": "Success",
+    "count": 1,
+    "columns": [{"name": "Username", "type": "STRING"}]
+  },
   "rows": [
     {
       "Username": "ivanov"
     }
   ],
-  "totalRows": 1,
   "offset": 0,
   "returnedRows": 1,
   "truncated": false
 }
 ```
 
-The MCP tool limits a single result request to 100 rows so large tables are not
-inserted into the LLM context in one response.
+The same MCP tool performs polling and result retrieval. It limits a single
+request to 100 rows so large tables are not inserted into the LLM context in one
+response.

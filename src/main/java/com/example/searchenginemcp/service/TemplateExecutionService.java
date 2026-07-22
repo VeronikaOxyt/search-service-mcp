@@ -3,7 +3,7 @@ package com.example.searchenginemcp.service;
 import com.example.searchenginemcp.dto.template.ExecuteTemplateRequest;
 import com.example.searchenginemcp.dto.template.QueryExecution;
 import com.example.searchenginemcp.dto.template.QueryResult;
-import com.example.searchenginemcp.dto.template.QueryStatus;
+import com.example.searchenginemcp.dto.template.QueryType;
 import com.example.searchenginemcp.dto.template.TemplateExecutionSchema;
 import com.example.searchenginemcp.dto.template.TemplateListRequest;
 import com.example.searchenginemcp.dto.template.TemplateListResponse;
@@ -95,28 +95,32 @@ public class TemplateExecutionService {
             throw new IllegalArgumentException("Missing required template parameters: " + missingKeys);
         }
 
-        return requireResponse(
+        QueryExecution execution = requireResponse(
                 backendClient.executeTemplate(
                         templateId,
                         new ExecuteTemplateRequest(templateVersion, parameters)),
                 "Template execution backend returned an empty response");
-    }
-
-    public QueryStatus getStatus(UUID executionId) {
-        return requireResponse(
-                backendClient.getQueryStatus(executionId),
-                "Query status backend returned an empty response");
+        QueryType queryType = requireResponse(
+                schema.queryType(),
+                "Template execution schema does not contain queryType");
+        return new QueryExecution(
+                execution.resultId(),
+                execution.templateId() == null ? templateId : execution.templateId(),
+                queryType,
+                execution.status(),
+                execution.message());
     }
 
     public QueryResult getResult(
-            UUID executionId,
+            UUID resultId,
+            QueryType queryType,
             Integer requestedOffset,
             Integer requestedLimit) {
         int offset = Math.max(requestedOffset == null ? 0 : requestedOffset, 0);
         int limit = clamp(requestedLimit, DEFAULT_RESULT_LIMIT, 1, MAX_RESULT_LIMIT);
 
         return requireResponse(
-                backendClient.getQueryResult(executionId, offset, limit),
+                backendClient.getQueryResult(resultId, queryType, offset, limit),
                 "Query result backend returned an empty response");
     }
 

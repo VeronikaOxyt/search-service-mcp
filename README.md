@@ -19,8 +19,7 @@ Saved-query template tools:
 - `listQueryTemplates` - lists personal or shared templates;
 - `getQueryTemplateParameters` - returns the typed execution schema for one template;
 - `executeQueryTemplate` - starts asynchronous execution using a template ID, version, and parameter values;
-- `getQueryStatus` - checks an asynchronous execution;
-- `getQueryResult` - returns a bounded page of table rows.
+- `getQueryResult` - checks execution readiness and returns a bounded page of table rows.
 
 Templates are backend data, not dynamically registered MCP tools. A template created
 in the web application is therefore available through `listQueryTemplates` without
@@ -93,11 +92,12 @@ The initial template implementation assumes these backend endpoints:
 POST /mid/template/list
 GET  /mid/template/{templateId}/execution-schema
 POST /mid/template/{templateId}/execute
-GET  /mid/query/{executionId}/status
-GET  /mid/query/{executionId}/result?offset=0&limit=20
+POST /mid/query/result
+POST /mid/query/crossResult
 ```
 
-The list endpoint is the existing endpoint. The remaining paths describe the
-expected backend extension and can be adjusted when its final API is agreed.
+The result endpoint is selected from the `queryType` returned by template
+execution. HTTP 425 and 426 mean that execution is still pending; HTTP 200
+contains the result page.
 See [`docs/template-tools.md`](docs/template-tools.md) for request and response
 examples and the complete MCP execution flow.

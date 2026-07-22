@@ -7,7 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.example.searchenginemcp.dto.template.ExecuteTemplateRequest;
 import com.example.searchenginemcp.dto.template.QueryExecution;
 import com.example.searchenginemcp.dto.template.QueryResult;
-import com.example.searchenginemcp.dto.template.QueryStatus;
+import com.example.searchenginemcp.dto.template.QueryResultMeta;
+import com.example.searchenginemcp.dto.template.QueryResultState;
+import com.example.searchenginemcp.dto.template.QueryType;
 import com.example.searchenginemcp.dto.template.TemplateExecutionSchema;
 import com.example.searchenginemcp.dto.template.TemplateListRequest;
 import com.example.searchenginemcp.dto.template.TemplateListResponse;
@@ -22,7 +24,7 @@ import org.junit.jupiter.api.Test;
 class TemplateExecutionServiceTest {
 
     private static final UUID TEMPLATE_ID = UUID.randomUUID();
-    private static final UUID EXECUTION_ID = UUID.randomUUID();
+    private static final UUID RESULT_ID = UUID.randomUUID();
 
     private RecordingTemplateBackendClient backendClient;
     private TemplateExecutionService service;
@@ -40,7 +42,8 @@ class TemplateExecutionServiceTest {
                 3,
                 Map.of("username", List.of("ivanov")));
 
-        assertEquals(EXECUTION_ID, execution.executionId());
+        assertEquals(RESULT_ID, execution.resultId());
+        assertEquals(QueryType.QUERY, execution.queryType());
         assertEquals(3, backendClient.executeRequest.templateVersion());
         assertEquals(
                 List.of("ivanov"),
@@ -88,12 +91,13 @@ class TemplateExecutionServiceTest {
     @Test
     void clampsTemplateAndResultPagination() {
         service.listTemplates(false, 1000, -10);
-        service.getResult(EXECUTION_ID, -20, 1000);
+        service.getResult(RESULT_ID, QueryType.CROSS, -20, 1000);
 
         assertEquals(50, backendClient.listRequest.limit());
         assertEquals(0, backendClient.listRequest.offset());
         assertEquals(0, backendClient.resultOffset);
         assertEquals(100, backendClient.resultLimit);
+        assertEquals(QueryType.CROSS, backendClient.resultQueryType);
     }
 
     private static final class RecordingTemplateBackendClient implements TemplateBackendClient {
@@ -102,6 +106,7 @@ class TemplateExecutionServiceTest {
         private ExecuteTemplateRequest executeRequest;
         private int resultOffset;
         private int resultLimit;
+        private QueryType resultQueryType;
 
         @Override
         public TemplateListResponse listTemplates(TemplateListRequest request) {
@@ -116,6 +121,7 @@ class TemplateExecutionServiceTest {
                     3,
                     "User events",
                     "Find events for a user",
+                    QueryType.QUERY,
                     List.of(
                             new TemplateParameter(
                                     "username",
@@ -140,23 +146,26 @@ class TemplateExecutionServiceTest {
         @Override
         public QueryExecution executeTemplate(UUID templateId, ExecuteTemplateRequest request) {
             executeRequest = request;
-            return new QueryExecution(EXECUTION_ID, templateId, "QUEUED", null);
+            return new QueryExecution(RESULT_ID, templateId, null, "QUEUED", null);
         }
 
         @Override
-        public QueryStatus getQueryStatus(UUID executionId) {
-            return new QueryStatus(executionId, "COMPLETED", null, 0L);
-        }
-
-        @Override
-        public QueryResult getQueryResult(UUID executionId, int offset, int limit) {
+        public QueryResult getQueryResult(
+                UUID resultId,
+                QueryType queryType,
+                int offset,
+                int limit) {
             resultOffset = offset;
             resultLimit = limit;
+            resultQueryType = queryType;
             return new QueryResult(
-                    executionId,
+                    resultId,
+                    queryType,
+                    QueryResultState.READY,
+                    200,
+                    null,
+                    new QueryResultMeta(List.of(), null, "Success", 0, null, null, null, null, List.of()),
                     List.of(),
-                    List.of(),
-                    0,
                     offset,
                     0,
                     false);

@@ -5,10 +5,13 @@ import java.util.Map;
 import java.util.UUID;
 
 public record QueryResult(
-        UUID executionId,
-        List<ResultColumn> columns,
+        UUID resultId,
+        QueryType queryType,
+        QueryResultState state,
+        int backendStatus,
+        String message,
+        QueryResultMeta metaInfo,
         List<Map<String, Object>> rows,
-        long totalRows,
         int offset,
         int returnedRows,
         boolean truncated) {
