@@ -11,6 +11,9 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import com.example.searchenginemcp.dto.template.QueryResult;
 import com.example.searchenginemcp.dto.template.QueryResultState;
 import com.example.searchenginemcp.dto.template.QueryType;
+import com.example.searchenginemcp.dto.template.BackendTemplateResponse;
+import com.example.searchenginemcp.dto.template.TopologyInfoTableResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,6 +26,8 @@ import org.springframework.web.client.RestClient;
 class HttpTemplateBackendClientTest {
 
     private static final UUID RESULT_ID = UUID.fromString("b2d50775-ae11-4d91-b98c-f0a4cb2f6059");
+    private static final UUID TEMPLATE_ID = UUID.fromString("92de4773-7a00-4000-8000-000000000000");
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private MockRestServiceServer server;
     private HttpTemplateBackendClient client;
@@ -32,6 +37,168 @@ class HttpTemplateBackendClientTest {
         RestClient.Builder builder = RestClient.builder().baseUrl("http://backend.test");
         server = MockRestServiceServer.bindTo(builder).build();
         client = new HttpTemplateBackendClient(builder.build());
+    }
+
+    @Test
+    void loadsRawTemplateByIdWithoutDroppingItsTree() {
+        server.expect(requestTo(
+                        "http://backend.test/mid/template?id=92de4773-7a00-4000-8000-000000000000"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withStatus(HttpStatus.OK)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("""
+                                {
+                                  "template": {
+                                    "name": "User events",
+                                    "where": {
+                                      "filters": [
+                                        {
+                                          "column": "Username",
+                                          "operator": "Equals",
+                                          "value": [""],
+                                          "backendSpecificField": "preserved"
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "metaInfo": {
+                                    "templateId": "92de4773-7a00-4000-8000-000000000000",
+                                    "isCross": false
+                                  }
+                                }
+                                """));
+
+        BackendTemplateResponse response = client.getTemplate(TEMPLATE_ID);
+
+        assertEquals("User events", response.template().path("name").asText());
+        assertEquals(
+                "preserved",
+                response.template()
+                        .at("/where/filters/0/backendSpecificField")
+                        .asText());
+        assertFalse(response.metaInfo().isCross());
+        server.verify();
+    }
+
+    @Test
+    void loadsTableStructureForRegularQuery() {
+        server.expect(requestTo(
+                        "http://backend.test/mid/query/topology/structureTable"
+                                + "?schemaName=log_armatm_src_distr"
+                                + "&tableName=parsed"
+                                + "&sourceName=datastore_clickhouse"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withStatus(HttpStatus.OK)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("""
+                                {
+                                  "tableInfo": {
+                                    "tableName": "parsed",
+                                    "schemaName": "log_armatm_src_distr",
+                                    "columns": [
+                                      {
+                                        "columnName": "SourceIP",
+                                        "logicColumnName": "Source IP",
+                                        "columnType": "IPv4",
+                                        "isBaseColumn": true
+                                      },
+                                      {
+                                        "columnName": "raw",
+                                        "columnType": "String",
+                                        "isBaseColumn": false
+                                      }
+                                    ]
+                                  }
+                                }
+                                """));
+
+        TopologyInfoTableResponse response = client.getTableStructure(
+                "datastore_clickhouse",
+                "log_armatm_src_distr",
+                "parsed");
+
+        assertTrue(response.tableInfo().columns().getFirst().isBaseColumn());
+        assertFalse(response.tableInfo().columns().get(1).isBaseColumn());
+        server.verify();
+    }
+
+    @Test
+    void submitsRegularQueryToItsExecutionEndpoint() throws Exception {
+        server.expect(requestTo(
+                        "http://backend.test/mid/query/executeQuery"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(content().json("""
+                        {
+                          "name": "User events",
+                          "where": {
+                            "filters": [
+                              {
+                                "column": "Username",
+                                "value": ["ivanov"]
+                              }
+                            ]
+                          }
+                        }
+                        """))
+                .andRespond(withStatus(HttpStatus.OK)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("""
+                                {
+                                  "resultId": "b2d50775-ae11-4d91-b98c-f0a4cb2f6059",
+                                  "templateId": "92de4773-7a00-4000-8000-000000000000",
+                                  "status": "QUEUED"
+                                }
+                                """));
+
+        client.executeTemplate(
+                QueryType.QUERY,
+                OBJECT_MAPPER.readTree("""
+                        {
+                          "name": "User events",
+                          "where": {
+                            "filters": [
+                              {
+                                "column": "Username",
+                                "value": ["ivanov"]
+                              }
+                            ]
+                          }
+                        }
+                        """));
+
+        server.verify();
+    }
+
+    @Test
+    void submitsCrossQueryToItsExecutionEndpoint() throws Exception {
+        server.expect(requestTo("http://backend.test/mid/query/executeCrossQuery"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(content().json("""
+                        {
+                          "sourceName": "datastore_clickhouse",
+                          "schemaName": ["schema_a", "schema_b"]
+                        }
+                        """))
+                .andRespond(withStatus(HttpStatus.OK)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("""
+                                {
+                                  "resultId": "b2d50775-ae11-4d91-b98c-f0a4cb2f6059",
+                                  "templateId": "92de4773-7a00-4000-8000-000000000000",
+                                  "status": "QUEUED"
+                                }
+                                """));
+
+        client.executeTemplate(
+                QueryType.CROSS,
+                OBJECT_MAPPER.readTree("""
+                        {
+                          "sourceName": "datastore_clickhouse",
+                          "schemaName": ["schema_a", "schema_b"]
+                        }
+                        """));
+
+        server.verify();
     }
 
     @Test

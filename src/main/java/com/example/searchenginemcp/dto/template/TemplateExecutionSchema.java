@@ -5,7 +5,6 @@ import java.util.UUID;
 
 public record TemplateExecutionSchema(
         UUID templateId,
-        long version,
         String name,
         String description,
         QueryType queryType,

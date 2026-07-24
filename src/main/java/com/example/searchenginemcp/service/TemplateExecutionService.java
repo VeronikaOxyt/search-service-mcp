@@ -1,6 +1,6 @@
 package com.example.searchenginemcp.service;
 
-import com.example.searchenginemcp.dto.template.ExecuteTemplateRequest;
+import com.example.searchenginemcp.dto.template.BackendTemplateResponse;
 import com.example.searchenginemcp.dto.template.QueryExecution;
 import com.example.searchenginemcp.dto.template.QueryResult;
 import com.example.searchenginemcp.dto.template.QueryType;
@@ -8,15 +8,14 @@ import com.example.searchenginemcp.dto.template.TemplateExecutionSchema;
 import com.example.searchenginemcp.dto.template.TemplateListRequest;
 import com.example.searchenginemcp.dto.template.TemplateListResponse;
 import com.example.searchenginemcp.dto.template.TemplateListResult;
-import com.example.searchenginemcp.dto.template.TemplateParameter;
-import java.lang.reflect.Array;
-import java.util.Collection;
-import java.util.Comparator;
+import com.example.searchenginemcp.dto.template.TopologyInfoTableResponse;
+import com.example.searchenginemcp.dto.template.TopologyTableColumn;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -28,9 +27,19 @@ public class TemplateExecutionService {
     private static final int MAX_RESULT_LIMIT = 100;
 
     private final TemplateBackendClient backendClient;
+    private final TemplateParameterExtractor parameterExtractor;
+    private final TemplateParameterApplicator parameterApplicator;
+    private final TemplateTimeRangeResolver timeRangeResolver;
 
-    public TemplateExecutionService(TemplateBackendClient backendClient) {
+    public TemplateExecutionService(
+            TemplateBackendClient backendClient,
+            TemplateParameterExtractor parameterExtractor,
+            TemplateParameterApplicator parameterApplicator,
+            TemplateTimeRangeResolver timeRangeResolver) {
         this.backendClient = backendClient;
+        this.parameterExtractor = parameterExtractor;
+        this.parameterApplicator = parameterApplicator;
+        this.timeRangeResolver = timeRangeResolver;
     }
 
     public TemplateListResult listTemplates(
@@ -50,65 +59,99 @@ public class TemplateExecutionService {
     }
 
     public TemplateExecutionSchema getExecutionSchema(UUID templateId) {
-        return requireResponse(
-                backendClient.getExecutionSchema(templateId),
-                "Template execution schema backend returned an empty response");
+        BackendTemplateResponse response = getTemplate(templateId);
+        JsonNode template = requireResponse(
+                response.template(),
+                "Template backend returned an empty template");
+        QueryType queryType = getQueryType(response);
+
+        return new TemplateExecutionSchema(
+                templateId,
+                textOrNull(template.get("name")),
+                null,
+                queryType,
+                parameterExtractor.extract(template));
     }
 
     public QueryExecution execute(
             UUID templateId,
-            long templateVersion,
-            Map<String, Object> suppliedParameters) {
-        TemplateExecutionSchema schema = getExecutionSchema(templateId);
-        Map<String, Object> parameters = suppliedParameters == null
-                ? Map.of()
-                : suppliedParameters;
-
-        if (schema.version() != templateVersion) {
-            throw new IllegalArgumentException(
-                    "Template version changed: requested %d, current %d"
-                            .formatted(templateVersion, schema.version()));
-        }
-
-        List<TemplateParameter> definitions = schema.parameters() == null
-                ? List.of()
-                : schema.parameters();
-        Set<String> allowedKeys = definitions.stream()
-                .map(TemplateParameter::key)
-                .collect(Collectors.toSet());
-
-        List<String> unknownKeys = parameters.keySet().stream()
-                .filter(key -> !allowedKeys.contains(key))
-                .sorted()
-                .toList();
-        if (!unknownKeys.isEmpty()) {
-            throw new IllegalArgumentException("Unknown template parameters: " + unknownKeys);
-        }
-
-        List<String> missingKeys = definitions.stream()
-                .filter(TemplateParameter::required)
-                .filter(parameter -> !hasValue(parameters.get(parameter.key())))
-                .map(TemplateParameter::key)
-                .sorted(Comparator.naturalOrder())
-                .toList();
-        if (!missingKeys.isEmpty()) {
-            throw new IllegalArgumentException("Missing required template parameters: " + missingKeys);
+            Map<String, List<String>> suppliedParameters) {
+        BackendTemplateResponse response = getTemplate(templateId);
+        JsonNode filledTemplate = parameterApplicator.apply(
+                response.template(),
+                suppliedParameters);
+        QueryType queryType = getQueryType(response);
+        JsonNode executionPayload = createExecutionPayload(filledTemplate, templateId);
+        timeRangeResolver.resolve((ObjectNode) executionPayload);
+        if (queryType == QueryType.QUERY) {
+            addBaseColumns((ObjectNode) executionPayload);
         }
 
         QueryExecution execution = requireResponse(
-                backendClient.executeTemplate(
-                        templateId,
-                        new ExecuteTemplateRequest(templateVersion, parameters)),
+                backendClient.executeTemplate(queryType, executionPayload),
                 "Template execution backend returned an empty response");
-        QueryType queryType = requireResponse(
-                schema.queryType(),
-                "Template execution schema does not contain queryType");
         return new QueryExecution(
                 execution.resultId(),
                 execution.templateId() == null ? templateId : execution.templateId(),
                 queryType,
                 execution.status(),
                 execution.message());
+    }
+
+    private static JsonNode createExecutionPayload(
+            JsonNode filledTemplate,
+            UUID templateId) {
+        if (!(filledTemplate instanceof ObjectNode payload)) {
+            throw new IllegalArgumentException("Template must be a JSON object");
+        }
+
+        String templateName = textOrNull(payload.get("name"));
+        payload.put(
+                "name",
+                templateName == null || templateName.isBlank()
+                        ? "Запрос по шаблону"
+                        : "Запрос по шаблону: " + templateName);
+        payload.put("templateId", templateId.toString());
+        payload.put("rqUid", UUID.randomUUID().toString());
+        return payload;
+    }
+
+    private void addBaseColumns(ObjectNode payload) {
+        String sourceName = requiredText(payload, "sourceName");
+        JsonNode table = payload.get("table");
+        if (table == null || !table.isObject()) {
+            throw new IllegalArgumentException(
+                    "Regular query template does not contain table");
+        }
+
+        String schemaName = requiredText(table, "schema");
+        String tableName = requiredText(table, "tableName");
+        TopologyInfoTableResponse response = requireResponse(
+                backendClient.getTableStructure(sourceName, schemaName, tableName),
+                "Table structure backend returned an empty response");
+        if (response.tableInfo() == null) {
+            throw new IllegalStateException(
+                    "Table structure backend returned an empty tableInfo");
+        }
+
+        List<TopologyTableColumn> columns = response.tableInfo().columns() == null
+                ? List.of()
+                : response.tableInfo().columns();
+        ArrayNode baseColumns = payload.putArray("baseColumns");
+        columns.stream()
+                .filter(TopologyTableColumn::isBaseColumn)
+                .map(TopologyTableColumn::columnName)
+                .filter(name -> name != null && !name.isBlank())
+                .forEach(baseColumns::add);
+    }
+
+    private static String requiredText(JsonNode object, String fieldName) {
+        String value = textOrNull(object.get(fieldName));
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Template does not contain required field " + fieldName);
+        }
+        return value;
     }
 
     public QueryResult getResult(
@@ -129,29 +172,21 @@ public class TemplateExecutionService {
         return Math.min(Math.max(value, min), max);
     }
 
-    private static boolean hasValue(Object value) {
-        if (value == null) {
-            return false;
-        }
-        if (value instanceof CharSequence text) {
-            return !text.toString().isBlank();
-        }
-        if (value instanceof Collection<?> collection) {
-            return !collection.isEmpty() && collection.stream().anyMatch(TemplateExecutionService::hasValue);
-        }
-        if (value instanceof Map<?, ?> map) {
-            return !map.isEmpty();
-        }
-        if (value.getClass().isArray()) {
-            int length = Array.getLength(value);
-            for (int index = 0; index < length; index++) {
-                if (hasValue(Array.get(value, index))) {
-                    return true;
-                }
-            }
-            return false;
-        }
-        return true;
+    private BackendTemplateResponse getTemplate(UUID templateId) {
+        return requireResponse(
+                backendClient.getTemplate(templateId),
+                "Template backend returned an empty response");
+    }
+
+    private static QueryType getQueryType(BackendTemplateResponse response) {
+        return response.metaInfo() != null
+                        && Boolean.TRUE.equals(response.metaInfo().isCross())
+                ? QueryType.CROSS
+                : QueryType.QUERY;
+    }
+
+    private static String textOrNull(JsonNode node) {
+        return node == null || node.isNull() ? null : node.asText();
     }
 
     private static <T> T requireResponse(T response, String message) {

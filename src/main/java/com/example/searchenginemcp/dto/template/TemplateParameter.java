@@ -1,5 +1,7 @@
 package com.example.searchenginemcp.dto.template;
 
+import java.util.List;
+
 public record TemplateParameter(
         String key,
         String label,
@@ -8,5 +10,5 @@ public record TemplateParameter(
         String format,
         boolean multiple,
         boolean required,
-        Object defaultValue) {
+        List<String> defaultValue) {
 }

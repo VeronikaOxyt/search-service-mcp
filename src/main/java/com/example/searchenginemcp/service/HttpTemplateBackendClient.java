@@ -1,7 +1,7 @@
 package com.example.searchenginemcp.service;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.example.searchenginemcp.dto.template.ExecuteTemplateRequest;
+import com.example.searchenginemcp.dto.template.BackendTemplateResponse;
 import com.example.searchenginemcp.dto.template.QueryExecution;
 import com.example.searchenginemcp.dto.template.QueryResult;
 import com.example.searchenginemcp.dto.template.QueryResultMeta;
@@ -9,9 +9,10 @@ import com.example.searchenginemcp.dto.template.QueryResultRequest;
 import com.example.searchenginemcp.dto.template.QueryResultState;
 import com.example.searchenginemcp.dto.template.QueryType;
 import com.example.searchenginemcp.dto.template.ResultColumn;
-import com.example.searchenginemcp.dto.template.TemplateExecutionSchema;
 import com.example.searchenginemcp.dto.template.TemplateListRequest;
 import com.example.searchenginemcp.dto.template.TemplateListResponse;
+import com.example.searchenginemcp.dto.template.TopologyInfoTableResponse;
+import com.fasterxml.jackson.databind.JsonNode;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -37,18 +38,42 @@ public class HttpTemplateBackendClient implements TemplateBackendClient {
     }
 
     @Override
-    public TemplateExecutionSchema getExecutionSchema(UUID templateId) {
+    public BackendTemplateResponse getTemplate(UUID templateId) {
         return restClient.get()
-                .uri("/mid/template/{templateId}/execution-schema", templateId)
+                .uri(uriBuilder -> uriBuilder
+                        .path("/mid/template")
+                        .queryParam("id", templateId)
+                        .build())
                 .retrieve()
-                .body(TemplateExecutionSchema.class);
+                .body(BackendTemplateResponse.class);
     }
 
     @Override
-    public QueryExecution executeTemplate(UUID templateId, ExecuteTemplateRequest request) {
+    public TopologyInfoTableResponse getTableStructure(
+            String sourceName,
+            String schemaName,
+            String tableName) {
+        return restClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/mid/query/topology/structureTable")
+                        .queryParam("schemaName", schemaName)
+                        .queryParam("tableName", tableName)
+                        .queryParam("sourceName", sourceName)
+                        .build())
+                .retrieve()
+                .body(TopologyInfoTableResponse.class);
+    }
+
+    @Override
+    public QueryExecution executeTemplate(QueryType queryType, JsonNode executionPayload) {
+        String path = switch (queryType) {
+            case QUERY -> "/mid/query/executeQuery";
+            case CROSS -> "/mid/query/executeCrossQuery";
+        };
+
         return restClient.post()
-                .uri("/mid/template/{templateId}/execute", templateId)
-                .body(request)
+                .uri(path)
+                .body(executionPayload)
                 .retrieve()
                 .body(QueryExecution.class);
     }

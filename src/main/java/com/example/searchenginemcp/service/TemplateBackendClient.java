@@ -1,21 +1,27 @@
 package com.example.searchenginemcp.service;
 
-import com.example.searchenginemcp.dto.template.ExecuteTemplateRequest;
+import com.example.searchenginemcp.dto.template.BackendTemplateResponse;
 import com.example.searchenginemcp.dto.template.QueryExecution;
 import com.example.searchenginemcp.dto.template.QueryResult;
 import com.example.searchenginemcp.dto.template.QueryType;
-import com.example.searchenginemcp.dto.template.TemplateExecutionSchema;
 import com.example.searchenginemcp.dto.template.TemplateListRequest;
 import com.example.searchenginemcp.dto.template.TemplateListResponse;
+import com.example.searchenginemcp.dto.template.TopologyInfoTableResponse;
+import com.fasterxml.jackson.databind.JsonNode;
 import java.util.UUID;
 
 public interface TemplateBackendClient {
 
     TemplateListResponse listTemplates(TemplateListRequest request);
 
-    TemplateExecutionSchema getExecutionSchema(UUID templateId);
+    BackendTemplateResponse getTemplate(UUID templateId);
 
-    QueryExecution executeTemplate(UUID templateId, ExecuteTemplateRequest request);
+    TopologyInfoTableResponse getTableStructure(
+            String sourceName,
+            String schemaName,
+            String tableName);
+
+    QueryExecution executeTemplate(QueryType queryType, JsonNode executionPayload);
 
     QueryResult getQueryResult(UUID resultId, QueryType queryType, int offset, int limit);
 }

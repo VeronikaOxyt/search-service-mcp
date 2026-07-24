@@ -6,6 +6,7 @@ import com.example.searchenginemcp.dto.template.QueryType;
 import com.example.searchenginemcp.dto.template.TemplateExecutionSchema;
 import com.example.searchenginemcp.dto.template.TemplateListResult;
 import com.example.searchenginemcp.service.TemplateExecutionService;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.ai.tool.annotation.Tool;
@@ -45,8 +46,8 @@ public class TemplateTools {
     @Tool(description = """
             Returns the execution parameters for a saved query template.
             Call this after selecting a template and before executing it.
-            Parameters marked required have no value in the template and must be supplied.
-            Optional parameters already have a default value and may be overridden.
+            Every returned parameter is an unlocked filter with an empty value
+            and must be supplied before execution.
             """)
     public TemplateExecutionSchema getQueryTemplateParameters(
             @ToolParam(description = "UUID of the saved query template.")
@@ -57,18 +58,18 @@ public class TemplateTools {
     @Tool(description = """
             Starts asynchronous execution of a saved query template.
             Get the parameter schema first and supply every required parameter.
-            DATE values use YYYY-MM-DD, DATETIME values use ISO-8601,
-            and parameters marked multiple are passed as arrays.
+            Every parameter value is passed as an array of strings.
             The result contains resultId and queryType; pass both to getQueryResult.
             """)
     public QueryExecution executeQueryTemplate(
             @ToolParam(description = "UUID of the saved query template.")
             UUID templateId,
-            @ToolParam(description = "Template version returned by getQueryTemplateParameters.")
-            long templateVersion,
-            @ToolParam(description = "Values keyed by parameter key from the template schema.")
-            Map<String, Object> parameters) {
-        return templateService.execute(templateId, templateVersion, parameters);
+            @ToolParam(description = """
+                    Values keyed by parameter key from the template schema.
+                    Each value must be an array of non-blank strings.
+                    """)
+            Map<String, List<String>> parameters) {
+        return templateService.execute(templateId, parameters);
     }
 
     @Tool(description = """

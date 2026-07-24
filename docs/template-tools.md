@@ -40,63 +40,121 @@ POST /mid/template/list
 
 The MCP result intentionally drops backend `status` and `timestamp` metadata.
 
-### Get an execution schema
+### Load a template and build its execution schema
 
 ```http
-GET /mid/template/{templateId}/execution-schema
+GET /mid/template?id={templateId}
 ```
+
+The backend returns `template` and `metaInfo`. The MCP server keeps the raw
+template as JSON so unknown backend fields survive the fetch-modify-submit
+round-trip. It recursively traverses `template.where.filters` and exposes only
+empty, unlocked leaf filters whose operators require a value.
+
+The MCP tool result is generated locally:
 
 ```json
 {
   "templateId": "92de4773-7a00-4000-8000-000000000000",
-  "version": 3,
   "name": "User events",
-  "description": "Find events for a user",
+  "description": null,
   "queryType": "QUERY",
   "parameters": [
     {
-      "key": "username",
-      "label": "User name",
-      "description": "User whose events should be found",
+      "key": "where.filters[0]",
+      "label": "Username",
+      "description": "Enter a value for column Username and operator Equals",
       "dataType": "STRING",
       "format": null,
       "multiple": true,
       "required": true,
       "defaultValue": null
-    },
-    {
-      "key": "dateFrom",
-      "label": "Start date",
-      "description": "Start date for the search",
-      "dataType": "DATE",
-      "format": "yyyy-MM-dd",
-      "multiple": false,
-      "required": false,
-      "defaultValue": "2026-07-01"
     }
   ]
 }
 ```
 
-The backend derives `required` from the template. An unlocked value-bearing
-filter is required only when the saved template has no value. An unlocked filter
-with a saved value is optional and that value acts as its default. Locked filters
-are never exposed as overridable parameters.
+Every exposed parameter is required. Filled filters, locked filters, and
+value-less operators such as `is N/A` are not exposed. Values are always arrays
+of strings because the backend model uses `List<String> value`.
 
 ### Start execution
 
-```http
-POST /mid/template/{templateId}/execute
-```
+The LLM calls `executeQueryTemplate` with MCP arguments:
 
 ```json
 {
-  "templateVersion": 3,
+  "templateId": "92de4773-7a00-4000-8000-000000000000",
   "parameters": {
-    "username": ["ivanov"]
+    "where.filters[0]": ["ivanov"]
   }
 }
 ```
+
+The MCP server fetches a fresh raw template, recursively finds the same filter
+paths, validates that every required path has a non-blank string array, writes
+the arrays into `value`, and adds:
+
+```json
+{
+  "name": "Запрос по шаблону: User events",
+  "templateId": "92de4773-7a00-4000-8000-000000000000",
+  "rqUid": "faef348e-f8fd-47bf-9b99-8e35f35bfe5e"
+}
+```
+
+For `queryType: QUERY`, it submits the filled template to:
+
+```http
+POST /mid/query/executeQuery
+```
+
+Before submission it reads `sourceName`, `table.schema`, and `table.tableName`
+from the template and loads the table structure:
+
+```http
+GET /mid/query/topology/structureTable
+  ?schemaName=log_armatm_src_distr
+  &tableName=parsed
+  &sourceName=datastore_clickhouse
+```
+
+It selects each structure column with `isBaseColumn: true`, takes its
+`columnName`, and adds the resulting string array:
+
+```json
+{
+  "baseColumns": [
+    "SourceHostname",
+    "SourceIP",
+    "Username"
+  ]
+}
+```
+
+For `queryType: CROSS`, it submits it to:
+
+```http
+POST /mid/query/executeCrossQuery
+```
+
+Existing raw fields such as `sourceName`, `table`, `schemaName`, `select`,
+`where`, `group`, `sort`, and `limit` are preserved.
+
+The structure lookup and `baseColumns` field are used only for a regular query.
+A cross query does not make this extra request.
+
+Before either execution endpoint is called, `TimeRangeUI` is converted to the
+backend `TimeRange` shape:
+
+- `range` keeps the saved `min` and `max`;
+- `mins` sets `max` to the current time and subtracts `value` minutes for `min`;
+- `hours` subtracts `value` hours;
+- `days` subtracts `value` days.
+
+The outgoing format is `yyyy-MM-dd HH:mm:ss`; UI-only fields `type` and `value`
+are removed. The timezone is configured by `search-service.time-zone` and
+defaults to `Europe/Moscow`.
 
 ```json
 {
@@ -108,10 +166,11 @@ POST /mid/template/{templateId}/execute
 }
 ```
 
-The MCP server checks the template version, required keys, and unknown keys. The
-backend remains the authoritative validator for value types, permissions, locked
-filters, and query semantics. The MCP server takes `queryType` from the execution
-schema rather than keeping it in process memory.
+The MCP server checks required and unknown keys and never overwrites filled or
+locked filters. This MVP intentionally has no template version, hash, or
+concurrent-change check. The backend remains the authoritative validator for
+permissions and query semantics. The MCP server derives `queryType` from
+`metaInfo.isCross` rather than keeping it in process memory.
 
 ### Check readiness and fetch a bounded result page
 

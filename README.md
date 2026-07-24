@@ -18,7 +18,7 @@ Saved-query template tools:
 
 - `listQueryTemplates` - lists personal or shared templates;
 - `getQueryTemplateParameters` - returns the typed execution schema for one template;
-- `executeQueryTemplate` - starts asynchronous execution using a template ID, version, and parameter values;
+- `executeQueryTemplate` - fills empty unlocked filters and starts asynchronous execution;
 - `getQueryResult` - checks execution readiness and returns a bounded page of table rows.
 
 Templates are backend data, not dynamically registered MCP tools. A template created
@@ -90,14 +90,21 @@ The initial template implementation assumes these backend endpoints:
 
 ```text
 POST /mid/template/list
-GET  /mid/template/{templateId}/execution-schema
-POST /mid/template/{templateId}/execute
+GET  /mid/template?id={templateId}
+GET  /mid/query/topology/structureTable
+POST /mid/query/executeQuery
+POST /mid/query/executeCrossQuery
 POST /mid/query/result
 POST /mid/query/crossResult
 ```
 
-The result endpoint is selected from the `queryType` returned by template
-execution. HTTP 425 and 426 mean that execution is still pending; HTTP 200
-contains the result page.
+The MCP server builds the execution schema locally by recursively traversing the
+template `where.filters` tree. It selects the execution and result endpoints
+from `metaInfo.isCross`. Before execution it adds the display name, `templateId`,
+and a new `rqUid` to the filled raw template. It converts `TimeRangeUI` to the
+absolute `min/max` shape expected by execution endpoints. For a regular query it
+also loads the selected table structure and adds every column marked
+`isBaseColumn` to `baseColumns`. HTTP 425 and 426 mean that execution is still
+pending; HTTP 200 contains the result page.
 See [`docs/template-tools.md`](docs/template-tools.md) for request and response
 examples and the complete MCP execution flow.
