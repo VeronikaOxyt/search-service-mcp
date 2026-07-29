@@ -16,13 +16,13 @@ Topology tool:
 
 Saved-query template tools:
 
-- `listQueryTemplates` - lists personal or shared templates;
+- `listSavedQueryTemplates` - lists personal or shared saved query templates;
 - `getQueryTemplateParameters` - returns the typed execution schema for one template;
 - `executeQueryTemplate` - fills empty unlocked filters and starts asynchronous execution;
 - `getQueryResult` - checks execution readiness and returns a bounded page of table rows.
 
 Templates are backend data, not dynamically registered MCP tools. A template created
-in the web application is therefore available through `listQueryTemplates` without
+in the web application is therefore available through `listSavedQueryTemplates` without
 restarting or redeploying this MCP server.
 
 The MCP response intentionally omits backend `status` and `timestamp` fields and

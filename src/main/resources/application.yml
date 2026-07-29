@@ -13,10 +13,15 @@ spring:
         sse-endpoint: /sse
         sse-message-endpoint: /mcp/message
         instructions: >
-          This server exposes search service topology sources and saved query
-          templates. Find a template, inspect its required parameters, start
-          asynchronous execution, check its status, and fetch a limited page of
-          table rows. Do not invent template IDs or parameter keys.
+          This server exposes two different concepts: data sources and saved
+          query templates. Routing rule: requests about template, saved query,
+          execution by template, or шаблон must start with
+          listSavedQueryTemplates and must never use
+          listSearchServiceSources. Use listSearchServiceSources only for
+          requests about data-source inventory, databases, storages, or
+          topology. To execute a template, find it, inspect its required
+          parameters, start asynchronous execution, and fetch a limited result
+          page. Do not invent template IDs or parameter keys.
 
 search-service:
   base-url: http://localhost:8080

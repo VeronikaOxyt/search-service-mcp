@@ -15,8 +15,12 @@ public class ReportingTools {
     }
 
     @Tool(description = """
-            Lists data sources available in the search service topology.
-            Use this when the user asks which data storages, repositories, or sources are available.
+            Lists DATA SOURCES from the search-service topology: databases,
+            storages and repositories that can be queried.
+            Use only when the user asks about data sources, topology or storages.
+            This tool does NOT return saved query templates.
+            Never use it for requests containing template, saved query or шаблон;
+            use listSavedQueryTemplates for those requests.
             """)
     public AvailableSourcesResult listSearchServiceSources() {
         return topologyClient.getSources();

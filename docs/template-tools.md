@@ -6,7 +6,7 @@ Templates remain backend entities. The MCP server exposes a fixed set of tools
 that discover and execute them:
 
 ```text
-listQueryTemplates
+listSavedQueryTemplates
 getQueryTemplateParameters
 executeQueryTemplate
 getQueryResult

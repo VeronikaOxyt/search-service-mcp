@@ -23,11 +23,14 @@ public class TemplateTools {
     }
 
     @Tool(description = """
-            Lists saved query templates available to the current user.
-            Use this first to find a template that matches the user's request.
+            Lists SAVED QUERY TEMPLATES available to the current user.
+            Use this for requests containing template, saved query or шаблон,
+            including requests to find, inspect or execute a template.
+            This tool does NOT return data sources, databases or topology.
+            Never substitute listSearchServiceSources for this tool.
             The result contains template IDs used by the other template tools.
             """)
-    public TemplateListResult listQueryTemplates(
+    public TemplateListResult listSavedQueryTemplates(
             @ToolParam(
                     description = "True for personal templates, false for shared templates.",
                     required = false)
