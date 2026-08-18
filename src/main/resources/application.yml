@@ -27,11 +27,3 @@ spring:
 search-service:
   base-url: ${SEARCH_SERVICE_BASE_URL:http://localhost:8080}
   time-zone: Europe/Moscow
-
-mcp:
-  security:
-    enabled: ${MCP_SECURITY_ENABLED:true}
-    issuer-uri: ${MCP_AUTH_ISSUER_URI:}
-    audience: ${MCP_AUTH_AUDIENCE:search-engine-mcp}
-    resource-uri: ${MCP_RESOURCE_URI:http://localhost:8081/mcp}
-    metadata-uri: ${MCP_RESOURCE_METADATA_URI:http://localhost:8081/.well-known/oauth-protected-resource}

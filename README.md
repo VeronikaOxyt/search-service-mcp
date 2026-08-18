@@ -68,72 +68,9 @@ tools/call listSearchServiceSources
 
 ## Run
 
-### OAuth security
-
-The HTTP MCP endpoints are OAuth2 Resource Server endpoints. Security is enabled
-by default. Configure the corporate OpenID Connect issuer and the public MCP URL:
-
-```bash
-export MCP_AUTH_ISSUER_URI=https://auth.example.ru/realms/search
-export MCP_AUTH_AUDIENCE=search-engine-mcp
-export MCP_RESOURCE_URI=https://mcp.example.ru/mcp
-export MCP_RESOURCE_METADATA_URI=https://mcp.example.ru/.well-known/oauth-protected-resource
-export SEARCH_SERVICE_BASE_URL=https://iam-proxy.example.ru/search-service
-mvn spring-boot:run
-```
-
-The server validates the JWT signature, issuer, audience and lifetime. Tool calls
-also require these scopes:
-
-```text
-sources:read
-templates:read
-templates:execute
-results:read
-```
-
-Inbound OAuth protects the MCP endpoints only. The current IAM Proxy accepts a
-browser session cookie and does not accept Bearer tokens from CLI applications,
-so the MCP server cannot yet authenticate its outbound backend calls safely.
-Do not copy a browser cookie into Qwen settings or application configuration:
-it is short-lived, user-specific and not designed for service-to-service use.
-
-Before production deployment, IAM must provide one of these supported machine
-interfaces: a Bearer-token route, OAuth Token Exchange/On-Behalf-Of, or another
-documented delegated-user flow. Personal templates require preserving the user
-identity; a shared service account alone is not equivalent.
-
-The public `/.well-known/oauth-protected-resource` endpoint advertises the issuer,
-resource and supported scopes. Unauthenticated calls to `/mcp` return HTTP 401
-with a `WWW-Authenticate` discovery challenge.
-
-For local development only, security can be explicitly disabled:
-
-```bash
-MCP_SECURITY_ENABLED=false mvn spring-boot:run
-```
-
-Do not disable security in a shared or deployed environment.
-
-Register Qwen as a public OAuth client with Authorization Code + PKCE. The
-Streamable HTTP connection can be configured as follows:
-
-```bash
-qwen mcp add \
-  --transport http \
-  search-engine-mcp \
-  https://mcp.example.ru/mcp \
-  --oauth-client-id qwen-cli \
-  --oauth-authorization-url https://auth.example.ru/realms/search/protocol/openid-connect/auth \
-  --oauth-token-url https://auth.example.ru/realms/search/protocol/openid-connect/token \
-  --oauth-redirect-uri http://127.0.0.1:7777/oauth/callback \
-  --oauth-scopes "openid,profile,sources:read,templates:read,templates:execute,results:read"
-```
-
-Do not configure a client secret for a public CLI client. The authorization
-server must require PKCE with the `S256` challenge method.
-
-### Starting the application
+The MCP endpoint currently has no authentication or authorization layer. Run it
+only in a local or otherwise trusted environment until an external access-control
+scheme is selected.
 
 ```bash
 mvn spring-boot:run
@@ -141,7 +78,7 @@ mvn spring-boot:run
 
 The MCP server listens on port `8081`.
 
-For local development with security disabled, add it to Qwen with:
+Add it to Qwen with:
 
 ```bash
 qwen mcp add --transport http search-engine-mcp http://localhost:8081/mcp

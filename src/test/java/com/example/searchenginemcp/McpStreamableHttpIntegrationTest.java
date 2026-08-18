@@ -1,17 +1,15 @@
-package com.example.searchenginemcp.config;
+package com.example.searchenginemcp;
 
 import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.containsString;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.example.searchenginemcp.SearchEngineMcpApplication;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -19,23 +17,15 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-@SpringBootTest(
-        classes = SearchEngineMcpApplication.class,
-        properties = "mcp.security.enabled=false")
+@SpringBootTest(classes = SearchEngineMcpApplication.class)
 @AutoConfigureMockMvc
-class LocalMcpSecurityIntegrationTest {
+class McpStreamableHttpIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
 
     @Test
-    void localModeDoesNotExposeOAuthMetadataOrRequireAuthentication() throws Exception {
-        mockMvc.perform(get("/.well-known/oauth-protected-resource"))
-                .andExpect(status().isNotFound());
-    }
-
-    @Test
-    void streamableHttpSessionInitializesAndListsAllToolsInLocalMode() throws Exception {
+    void streamableHttpSessionInitializesAndListsAllTools() throws Exception {
         MvcResult initialize = mockMvc.perform(post("/mcp")
                         .contentType("application/json")
                         .accept("application/json", "text/event-stream")
