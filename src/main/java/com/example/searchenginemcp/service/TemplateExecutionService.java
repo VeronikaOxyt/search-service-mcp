@@ -10,9 +10,9 @@ import com.example.searchenginemcp.dto.template.TemplateListResponse;
 import com.example.searchenginemcp.dto.template.TemplateListResult;
 import com.example.searchenginemcp.dto.template.TopologyInfoTableResponse;
 import com.example.searchenginemcp.dto.template.TopologyTableColumn;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -186,7 +186,7 @@ public class TemplateExecutionService {
     }
 
     private static String textOrNull(JsonNode node) {
-        return node == null || node.isNull() ? null : node.asText();
+        return node == null || node.isNull() ? null : node.asString();
     }
 
     private static <T> T requireResponse(T response, String message) {

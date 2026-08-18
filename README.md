@@ -2,6 +2,14 @@
 
 Spring Boot MCP server for exposing search service topology sources to AI clients.
 
+## Technology Stack
+
+- Java 21
+- Spring Boot 4.1.0
+- Spring AI 2.0.0
+- Jackson 3
+- MCP Streamable HTTP transport
+
 The server calls the existing backend endpoint:
 
 ```http

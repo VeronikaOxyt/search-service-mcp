@@ -13,7 +13,7 @@ import com.example.searchenginemcp.dto.template.QueryResultState;
 import com.example.searchenginemcp.dto.template.QueryType;
 import com.example.searchenginemcp.dto.template.BackendTemplateResponse;
 import com.example.searchenginemcp.dto.template.TopologyInfoTableResponse;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -70,12 +70,12 @@ class HttpTemplateBackendClientTest {
 
         BackendTemplateResponse response = client.getTemplate(TEMPLATE_ID);
 
-        assertEquals("User events", response.template().path("name").asText());
+        assertEquals("User events", response.template().path("name").asString());
         assertEquals(
                 "preserved",
                 response.template()
                         .at("/where/filters/0/backendSpecificField")
-                        .asText());
+                        .asString());
         assertFalse(response.metaInfo().isCross());
         server.verify();
     }

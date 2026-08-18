@@ -3,8 +3,8 @@ package com.example.searchenginemcp.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import org.junit.jupiter.api.BeforeEach;
@@ -114,8 +114,8 @@ class TemplateTimeRangeResolverTest {
             ObjectNode payload,
             String expectedMin,
             String expectedMax) {
-        assertEquals(expectedMin, payload.at("/timeRange/min").asText());
-        assertEquals(expectedMax, payload.at("/timeRange/max").asText());
+        assertEquals(expectedMin, payload.at("/timeRange/min").asString());
+        assertEquals(expectedMax, payload.at("/timeRange/max").asString());
         assertTrue(payload.at("/timeRange/type").isMissingNode());
         assertTrue(payload.at("/timeRange/value").isMissingNode());
     }

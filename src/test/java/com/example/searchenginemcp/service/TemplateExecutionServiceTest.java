@@ -17,8 +17,8 @@ import com.example.searchenginemcp.dto.template.TemplateMetaInfo;
 import com.example.searchenginemcp.dto.template.TopologyInfoTableResponse;
 import com.example.searchenginemcp.dto.template.TopologyTable;
 import com.example.searchenginemcp.dto.template.TopologyTableColumn;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -69,38 +69,38 @@ class TemplateExecutionServiceTest {
                 "ivanov",
                 backendClient.filledTemplate
                         .at("/where/filters/0/value/0")
-                        .asText());
+                        .asString());
         assertEquals(
                 "10.0.0.1",
                 backendClient.filledTemplate
                         .at("/where/filters/1/filters/0/value/0")
-                        .asText());
+                        .asString());
         assertEquals(
                 "123",
                 backendClient.filledTemplate
                         .at("/where/filters/1/filters/1/value/0")
-                        .asText());
+                        .asString());
         assertEquals(
                 "Запрос по шаблону: User events",
-                backendClient.filledTemplate.path("name").asText());
+                backendClient.filledTemplate.path("name").asString());
         assertEquals(
                 TEMPLATE_ID.toString(),
-                backendClient.filledTemplate.path("templateId").asText());
-        UUID.fromString(backendClient.filledTemplate.path("rqUid").asText());
+                backendClient.filledTemplate.path("templateId").asString());
+        UUID.fromString(backendClient.filledTemplate.path("rqUid").asString());
         assertEquals(
                 "2026-07-23 16:43:42",
-                backendClient.filledTemplate.at("/timeRange/min").asText());
+                backendClient.filledTemplate.at("/timeRange/min").asString());
         assertEquals(
                 "2026-07-23 16:48:42",
-                backendClient.filledTemplate.at("/timeRange/max").asText());
+                backendClient.filledTemplate.at("/timeRange/max").asString());
         assertTrue(backendClient.filledTemplate.at("/timeRange/type").isMissingNode());
         assertTrue(backendClient.filledTemplate.at("/timeRange/value").isMissingNode());
         assertEquals(
                 "SourceIP",
-                backendClient.filledTemplate.path("baseColumns").get(0).asText());
+                backendClient.filledTemplate.path("baseColumns").get(0).asString());
         assertEquals(
                 "Username",
-                backendClient.filledTemplate.path("baseColumns").get(1).asText());
+                backendClient.filledTemplate.path("baseColumns").get(1).asString());
         assertEquals("datastore_clickhouse", backendClient.structureSourceName);
         assertEquals("log_armatm_src_distr", backendClient.structureSchemaName);
         assertEquals("parsed", backendClient.structureTableName);

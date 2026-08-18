@@ -1,9 +1,9 @@
 package com.example.searchenginemcp.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.JsonNodeFactory;
+import tools.jackson.databind.node.ObjectNode;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,7 +20,7 @@ public class TemplateParameterApplicator {
             throw new IllegalArgumentException("Template is empty");
         }
 
-        ObjectNode template = originalTemplate.deepCopy();
+        ObjectNode template = (ObjectNode) originalTemplate.deepCopy();
         Map<String, List<String>> parameters = suppliedParameters == null
                 ? Map.of()
                 : suppliedParameters;
@@ -68,8 +68,8 @@ public class TemplateParameterApplicator {
         }
 
         if (locked
-                || node.path("column").asText("").isBlank()
-                || !TemplateParameterExtractor.operatorRequiresValue(node.path("operator").asText())
+                || node.path("column").asString("").isBlank()
+                || !TemplateParameterExtractor.operatorRequiresValue(node.path("operator").asString())
                 || !TemplateParameterExtractor.isEmptyValue(node.get("value"))) {
             return;
         }

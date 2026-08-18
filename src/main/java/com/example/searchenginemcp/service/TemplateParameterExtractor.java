@@ -2,7 +2,7 @@ package com.example.searchenginemcp.service;
 
 import com.example.searchenginemcp.dto.template.TemplateParameter;
 import com.example.searchenginemcp.dto.template.TemplateParameterType;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -63,19 +63,19 @@ public class TemplateParameterExtractor {
             return;
         }
 
-        if (locked || !isLeaf(node) || !operatorRequiresValue(node.path("operator").asText())) {
+        if (locked || !isLeaf(node) || !operatorRequiresValue(node.path("operator").asString())) {
             return;
         }
         if (!isEmptyValue(node.get("value"))) {
             return;
         }
 
-        String column = node.path("column").asText();
+        String column = node.path("column").asString();
         result.add(new TemplateParameter(
                 path,
                 column,
                 "Enter a value for column %s and operator %s"
-                        .formatted(column, node.path("operator").asText()),
+                        .formatted(column, node.path("operator").asString()),
                 TemplateParameterType.STRING,
                 null,
                 true,
@@ -84,8 +84,8 @@ public class TemplateParameterExtractor {
     }
 
     private static boolean isLeaf(JsonNode node) {
-        return !node.path("column").asText("").isBlank()
-                && !node.path("operator").asText("").isBlank();
+        return !node.path("column").asString("").isBlank()
+                && !node.path("operator").asString("").isBlank();
     }
 
     static boolean isEmptyValue(JsonNode value) {
@@ -93,13 +93,13 @@ public class TemplateParameterExtractor {
             return true;
         }
         if (!value.isArray()) {
-            return value.asText("").isBlank();
+            return value.asString("").isBlank();
         }
         if (value.isEmpty()) {
             return true;
         }
         for (JsonNode element : value) {
-            if (element != null && !element.isNull() && !element.asText("").isBlank()) {
+            if (element != null && !element.isNull() && !element.asString("").isBlank()) {
                 return false;
             }
         }

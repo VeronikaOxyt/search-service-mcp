@@ -1,7 +1,7 @@
 package com.example.searchenginemcp.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -80,10 +80,10 @@ public class TemplateTimeRangeResolver {
 
     private static String requiredText(JsonNode object, String fieldName) {
         JsonNode value = object.get(fieldName);
-        if (value == null || value.isNull() || value.asText("").isBlank()) {
+        if (value == null || value.isNull() || value.asString("").isBlank()) {
             throw new IllegalArgumentException(
                     "Template timeRange does not contain required field " + fieldName);
         }
-        return value.asText();
+        return value.asString();
     }
 }

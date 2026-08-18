@@ -7,7 +7,7 @@ import com.example.searchenginemcp.dto.template.QueryType;
 import com.example.searchenginemcp.dto.template.TemplateListRequest;
 import com.example.searchenginemcp.dto.template.TemplateListResponse;
 import com.example.searchenginemcp.dto.template.TopologyInfoTableResponse;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import java.util.UUID;
 
 public interface TemplateBackendClient {
