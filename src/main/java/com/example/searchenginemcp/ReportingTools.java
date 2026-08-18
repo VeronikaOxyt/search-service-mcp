@@ -3,6 +3,7 @@ package com.example.searchenginemcp;
 import com.example.searchenginemcp.dto.AvailableSourcesResult;
 import com.example.searchenginemcp.service.SearchServiceTopologyClient;
 import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -14,6 +15,7 @@ public class ReportingTools {
         this.topologyClient = topologyClient;
     }
 
+    @PreAuthorize("hasAuthority('SCOPE_sources:read')")
     @Tool(description = """
             Lists DATA SOURCES from the search-service topology: databases,
             storages and repositories that can be queried.

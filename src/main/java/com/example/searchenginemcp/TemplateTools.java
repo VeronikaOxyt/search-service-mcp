@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -22,6 +23,7 @@ public class TemplateTools {
         this.templateService = templateService;
     }
 
+    @PreAuthorize("hasAuthority('SCOPE_templates:read')")
     @Tool(description = """
             Lists SAVED QUERY TEMPLATES available to the current user.
             Use this for requests containing template, saved query or шаблон,
@@ -46,6 +48,7 @@ public class TemplateTools {
         return templateService.listTemplates(Boolean.TRUE.equals(personal), limit, offset);
     }
 
+    @PreAuthorize("hasAuthority('SCOPE_templates:read')")
     @Tool(description = """
             Returns the execution parameters for a saved query template.
             Call this after selecting a template and before executing it.
@@ -58,6 +61,7 @@ public class TemplateTools {
         return templateService.getExecutionSchema(templateId);
     }
 
+    @PreAuthorize("hasAuthority('SCOPE_templates:execute')")
     @Tool(description = """
             Starts asynchronous execution of a saved query template.
             Get the parameter schema first and supply every required parameter.
@@ -75,6 +79,7 @@ public class TemplateTools {
         return templateService.execute(templateId, parameters);
     }
 
+    @PreAuthorize("hasAuthority('SCOPE_results:read')")
     @Tool(description = """
             Checks an asynchronous query and returns one page when it is ready.
             State PENDING means the backend returned HTTP 425 or 426; call this tool again later.
