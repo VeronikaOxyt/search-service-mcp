@@ -2,6 +2,7 @@ package com.example.searchenginemcp;
 
 import com.example.searchenginemcp.dto.AvailableSourcesResult;
 import com.example.searchenginemcp.service.SearchServiceTopologyClient;
+import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 
@@ -22,7 +23,8 @@ public class ReportingTools {
             Never use it for requests containing template, saved query or шаблон;
             use listSavedQueryTemplates for those requests.
             """)
-    public AvailableSourcesResult listSearchServiceSources() {
-        return topologyClient.getSources();
+    public AvailableSourcesResult listSearchServiceSources(ToolContext toolContext) {
+        return topologyClient.getSources(
+                McpRequestAuthorization.requireBearerToken(toolContext));
     }
 }

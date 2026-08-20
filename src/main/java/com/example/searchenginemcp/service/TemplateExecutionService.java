@@ -45,12 +45,14 @@ public class TemplateExecutionService {
     public TemplateListResult listTemplates(
             boolean personal,
             Integer requestedLimit,
-            Integer requestedOffset) {
+            Integer requestedOffset,
+            String authorization) {
         int limit = clamp(requestedLimit, DEFAULT_TEMPLATE_LIMIT, 1, MAX_TEMPLATE_LIMIT);
         int offset = Math.max(requestedOffset == null ? 0 : requestedOffset, 0);
 
         TemplateListResponse response = requireResponse(
-                backendClient.listTemplates(TemplateListRequest.of(personal, limit, offset)),
+                backendClient.listTemplates(
+                        TemplateListRequest.of(personal, limit, offset), authorization),
                 "Template list backend returned an empty response");
 
         return new TemplateListResult(
@@ -58,8 +60,8 @@ public class TemplateExecutionService {
                 response.templateList() == null ? List.of() : response.templateList());
     }
 
-    public TemplateExecutionSchema getExecutionSchema(UUID templateId) {
-        BackendTemplateResponse response = getTemplate(templateId);
+    public TemplateExecutionSchema getExecutionSchema(UUID templateId, String authorization) {
+        BackendTemplateResponse response = getTemplate(templateId, authorization);
         JsonNode template = requireResponse(
                 response.template(),
                 "Template backend returned an empty template");
@@ -75,8 +77,9 @@ public class TemplateExecutionService {
 
     public QueryExecution execute(
             UUID templateId,
-            Map<String, List<String>> suppliedParameters) {
-        BackendTemplateResponse response = getTemplate(templateId);
+            Map<String, List<String>> suppliedParameters,
+            String authorization) {
+        BackendTemplateResponse response = getTemplate(templateId, authorization);
         JsonNode filledTemplate = parameterApplicator.apply(
                 response.template(),
                 suppliedParameters);
@@ -84,11 +87,11 @@ public class TemplateExecutionService {
         JsonNode executionPayload = createExecutionPayload(filledTemplate, templateId);
         timeRangeResolver.resolve((ObjectNode) executionPayload);
         if (queryType == QueryType.QUERY) {
-            addBaseColumns((ObjectNode) executionPayload);
+            addBaseColumns((ObjectNode) executionPayload, authorization);
         }
 
         QueryExecution execution = requireResponse(
-                backendClient.executeTemplate(queryType, executionPayload),
+                backendClient.executeTemplate(queryType, executionPayload, authorization),
                 "Template execution backend returned an empty response");
         return new QueryExecution(
                 execution.resultId(),
@@ -116,7 +119,7 @@ public class TemplateExecutionService {
         return payload;
     }
 
-    private void addBaseColumns(ObjectNode payload) {
+    private void addBaseColumns(ObjectNode payload, String authorization) {
         String sourceName = requiredText(payload, "sourceName");
         JsonNode table = payload.get("table");
         if (table == null || !table.isObject()) {
@@ -127,7 +130,8 @@ public class TemplateExecutionService {
         String schemaName = requiredText(table, "schema");
         String tableName = requiredText(table, "tableName");
         TopologyInfoTableResponse response = requireResponse(
-                backendClient.getTableStructure(sourceName, schemaName, tableName),
+                backendClient.getTableStructure(
+                        sourceName, schemaName, tableName, authorization),
                 "Table structure backend returned an empty response");
         if (response.tableInfo() == null) {
             throw new IllegalStateException(
@@ -158,12 +162,14 @@ public class TemplateExecutionService {
             UUID resultId,
             QueryType queryType,
             Integer requestedOffset,
-            Integer requestedLimit) {
+            Integer requestedLimit,
+            String authorization) {
         int offset = Math.max(requestedOffset == null ? 0 : requestedOffset, 0);
         int limit = clamp(requestedLimit, DEFAULT_RESULT_LIMIT, 1, MAX_RESULT_LIMIT);
 
         return requireResponse(
-                backendClient.getQueryResult(resultId, queryType, offset, limit),
+                backendClient.getQueryResult(
+                        resultId, queryType, offset, limit, authorization),
                 "Query result backend returned an empty response");
     }
 
@@ -172,9 +178,9 @@ public class TemplateExecutionService {
         return Math.min(Math.max(value, min), max);
     }
 
-    private BackendTemplateResponse getTemplate(UUID templateId) {
+    private BackendTemplateResponse getTemplate(UUID templateId, String authorization) {
         return requireResponse(
-                backendClient.getTemplate(templateId),
+                backendClient.getTemplate(templateId, authorization),
                 "Template backend returned an empty response");
     }
 

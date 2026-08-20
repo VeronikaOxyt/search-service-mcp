@@ -74,11 +74,25 @@ tools/call listSearchServiceSources
   -> GET /query/topology/sources
 ```
 
-## Run
+## JWT Forwarding
 
-The MCP endpoint currently has no authentication or authorization layer. Run it
-only in a local or otherwise trusted environment until an external access-control
-scheme is selected.
+Every `tools/call` request must contain the user's bearer token:
+
+```http
+Authorization: Bearer <JWT>
+```
+
+The token is kept in the request-specific MCP transport context and the same JWT
+is forwarded with the Bearer scheme in the `Authorization` header of every call
+to the search-service backend. It is not exposed as a tool argument or included
+in the tool JSON Schema.
+
+The MCP server validates only that the header uses the Bearer scheme. It does not
+verify the JWT signature, expiration, audience or permissions; that remains the
+responsibility of the IAM Proxy or backend. Configure the MCP client to send this
+header on every HTTP request to `/mcp`.
+
+## Run
 
 ```bash
 mvn spring-boot:run

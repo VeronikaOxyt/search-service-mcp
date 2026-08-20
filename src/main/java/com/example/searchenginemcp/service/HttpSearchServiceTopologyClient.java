@@ -4,6 +4,7 @@ import com.example.searchenginemcp.dto.AvailableSourcesResult;
 import com.example.searchenginemcp.dto.TopologySourcesResponse;
 import java.util.List;
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.client.RestClient;
 
 @Service
@@ -16,9 +17,10 @@ public class HttpSearchServiceTopologyClient implements SearchServiceTopologyCli
     }
 
     @Override
-    public AvailableSourcesResult getSources() {
+    public AvailableSourcesResult getSources(String authorization) {
         TopologySourcesResponse response = restClient.get()
                 .uri("/query/topology/sources")
+                .header(HttpHeaders.AUTHORIZATION, authorization)
                 .retrieve()
                 .body(TopologySourcesResponse.class);
 

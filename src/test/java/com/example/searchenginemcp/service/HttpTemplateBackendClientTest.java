@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
@@ -13,6 +14,7 @@ import com.example.searchenginemcp.dto.template.QueryResultState;
 import com.example.searchenginemcp.dto.template.QueryType;
 import com.example.searchenginemcp.dto.template.BackendTemplateResponse;
 import com.example.searchenginemcp.dto.template.TopologyInfoTableResponse;
+import com.example.searchenginemcp.dto.template.TemplateListRequest;
 import tools.jackson.databind.ObjectMapper;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,6 +29,7 @@ class HttpTemplateBackendClientTest {
 
     private static final UUID RESULT_ID = UUID.fromString("b2d50775-ae11-4d91-b98c-f0a4cb2f6059");
     private static final UUID TEMPLATE_ID = UUID.fromString("92de4773-7a00-4000-8000-000000000000");
+    private static final String AUTHORIZATION = "Bearer test.jwt.token";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private MockRestServiceServer server;
@@ -44,6 +47,7 @@ class HttpTemplateBackendClientTest {
         server.expect(requestTo(
                         "http://backend.test/mid/template?id=92de4773-7a00-4000-8000-000000000000"))
                 .andExpect(method(HttpMethod.GET))
+                .andExpect(header("Authorization", AUTHORIZATION))
                 .andRespond(withStatus(HttpStatus.OK)
                         .contentType(MediaType.APPLICATION_JSON)
                         .body("""
@@ -68,7 +72,7 @@ class HttpTemplateBackendClientTest {
                                 }
                                 """));
 
-        BackendTemplateResponse response = client.getTemplate(TEMPLATE_ID);
+        BackendTemplateResponse response = client.getTemplate(TEMPLATE_ID, AUTHORIZATION);
 
         assertEquals("User events", response.template().path("name").asString());
         assertEquals(
@@ -81,6 +85,26 @@ class HttpTemplateBackendClientTest {
     }
 
     @Test
+    void listsTemplatesWithForwardedAuthorization() {
+        server.expect(requestTo("http://backend.test/mid/template/list"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(header("Authorization", AUTHORIZATION))
+                .andRespond(withStatus(HttpStatus.OK)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("""
+                                {
+                                  "status": 200,
+                                  "templateCount": 0,
+                                  "templateList": []
+                                }
+                                """));
+
+        client.listTemplates(TemplateListRequest.of(false, 20, 0), AUTHORIZATION);
+
+        server.verify();
+    }
+
+    @Test
     void loadsTableStructureForRegularQuery() {
         server.expect(requestTo(
                         "http://backend.test/mid/query/topology/structureTable"
@@ -88,6 +112,7 @@ class HttpTemplateBackendClientTest {
                                 + "&tableName=parsed"
                                 + "&sourceName=datastore_clickhouse"))
                 .andExpect(method(HttpMethod.GET))
+                .andExpect(header("Authorization", AUTHORIZATION))
                 .andRespond(withStatus(HttpStatus.OK)
                         .contentType(MediaType.APPLICATION_JSON)
                         .body("""
@@ -115,7 +140,8 @@ class HttpTemplateBackendClientTest {
         TopologyInfoTableResponse response = client.getTableStructure(
                 "datastore_clickhouse",
                 "log_armatm_src_distr",
-                "parsed");
+                "parsed",
+                AUTHORIZATION);
 
         assertTrue(response.tableInfo().columns().getFirst().isBaseColumn());
         assertFalse(response.tableInfo().columns().get(1).isBaseColumn());
@@ -127,6 +153,7 @@ class HttpTemplateBackendClientTest {
         server.expect(requestTo(
                         "http://backend.test/mid/query/executeQuery"))
                 .andExpect(method(HttpMethod.POST))
+                .andExpect(header("Authorization", AUTHORIZATION))
                 .andExpect(content().json("""
                         {
                           "name": "User events",
@@ -164,7 +191,8 @@ class HttpTemplateBackendClientTest {
                             ]
                           }
                         }
-                        """));
+                        """),
+                AUTHORIZATION);
 
         server.verify();
     }
@@ -173,6 +201,7 @@ class HttpTemplateBackendClientTest {
     void submitsCrossQueryToItsExecutionEndpoint() throws Exception {
         server.expect(requestTo("http://backend.test/mid/query/executeCrossQuery"))
                 .andExpect(method(HttpMethod.POST))
+                .andExpect(header("Authorization", AUTHORIZATION))
                 .andExpect(content().json("""
                         {
                           "sourceName": "datastore_clickhouse",
@@ -196,7 +225,8 @@ class HttpTemplateBackendClientTest {
                           "sourceName": "datastore_clickhouse",
                           "schemaName": ["schema_a", "schema_b"]
                         }
-                        """));
+                        """),
+                AUTHORIZATION);
 
         server.verify();
     }
@@ -205,6 +235,7 @@ class HttpTemplateBackendClientTest {
     void mapsHttp425ForRegularQueryToPending() {
         server.expect(requestTo("http://backend.test/mid/query/result"))
                 .andExpect(method(HttpMethod.POST))
+                .andExpect(header("Authorization", AUTHORIZATION))
                 .andExpect(content().json("""
                         {"limit":50,"offset":0,"resultId":"b2d50775-ae11-4d91-b98c-f0a4cb2f6059"}
                         """))
@@ -225,7 +256,8 @@ class HttpTemplateBackendClientTest {
                                 }
                                 """));
 
-        QueryResult result = client.getQueryResult(RESULT_ID, QueryType.QUERY, 0, 50);
+        QueryResult result = client.getQueryResult(
+                RESULT_ID, QueryType.QUERY, 0, 50, AUTHORIZATION);
 
         assertEquals(QueryResultState.PENDING, result.state());
         assertEquals(425, result.backendStatus());
@@ -238,6 +270,7 @@ class HttpTemplateBackendClientTest {
     void mapsCompletedCrossQueryAndPaginationMetadata() {
         server.expect(requestTo("http://backend.test/mid/query/crossResult"))
                 .andExpect(method(HttpMethod.POST))
+                .andExpect(header("Authorization", AUTHORIZATION))
                 .andExpect(content().json("""
                         {"limit":2,"offset":0,"resultId":"b2d50775-ae11-4d91-b98c-f0a4cb2f6059"}
                         """))
@@ -267,7 +300,8 @@ class HttpTemplateBackendClientTest {
                                 }
                                 """));
 
-        QueryResult result = client.getQueryResult(RESULT_ID, QueryType.CROSS, 0, 2);
+        QueryResult result = client.getQueryResult(
+                RESULT_ID, QueryType.CROSS, 0, 2, AUTHORIZATION);
 
         assertEquals(QueryResultState.READY, result.state());
         assertEquals(2, result.returnedRows());

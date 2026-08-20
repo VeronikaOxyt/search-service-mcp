@@ -12,16 +12,25 @@ import java.util.UUID;
 
 public interface TemplateBackendClient {
 
-    TemplateListResponse listTemplates(TemplateListRequest request);
+    TemplateListResponse listTemplates(TemplateListRequest request, String authorization);
 
-    BackendTemplateResponse getTemplate(UUID templateId);
+    BackendTemplateResponse getTemplate(UUID templateId, String authorization);
 
     TopologyInfoTableResponse getTableStructure(
             String sourceName,
             String schemaName,
-            String tableName);
+            String tableName,
+            String authorization);
 
-    QueryExecution executeTemplate(QueryType queryType, JsonNode executionPayload);
+    QueryExecution executeTemplate(
+            QueryType queryType,
+            JsonNode executionPayload,
+            String authorization);
 
-    QueryResult getQueryResult(UUID resultId, QueryType queryType, int offset, int limit);
+    QueryResult getQueryResult(
+            UUID resultId,
+            QueryType queryType,
+            int offset,
+            int limit,
+            String authorization);
 }

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Method;
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
 
 class ToolRoutingMetadataTest {
@@ -14,7 +15,8 @@ class ToolRoutingMetadataTest {
                 "listSavedQueryTemplates",
                 Boolean.class,
                 Integer.class,
-                Integer.class);
+                Integer.class,
+                ToolContext.class);
         String description = method.getAnnotation(Tool.class).description();
 
         assertTrue(description.contains("SAVED QUERY TEMPLATES"));
@@ -25,7 +27,8 @@ class ToolRoutingMetadataTest {
     @Test
     void dataSourceListToolExplicitlyRejectsTemplateRequests() throws Exception {
         Method method = ReportingTools.class.getDeclaredMethod(
-                "listSearchServiceSources");
+                "listSearchServiceSources",
+                ToolContext.class);
         String description = method.getAnnotation(Tool.class).description();
 
         assertTrue(description.contains("DATA SOURCES"));

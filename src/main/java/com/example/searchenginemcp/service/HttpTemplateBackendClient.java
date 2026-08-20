@@ -16,6 +16,7 @@ import tools.jackson.databind.JsonNode;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
@@ -29,21 +30,23 @@ public class HttpTemplateBackendClient implements TemplateBackendClient {
     }
 
     @Override
-    public TemplateListResponse listTemplates(TemplateListRequest request) {
+    public TemplateListResponse listTemplates(TemplateListRequest request, String authorization) {
         return restClient.post()
                 .uri("/mid/template/list")
+                .header(HttpHeaders.AUTHORIZATION, authorization)
                 .body(request)
                 .retrieve()
                 .body(TemplateListResponse.class);
     }
 
     @Override
-    public BackendTemplateResponse getTemplate(UUID templateId) {
+    public BackendTemplateResponse getTemplate(UUID templateId, String authorization) {
         return restClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/mid/template")
                         .queryParam("id", templateId)
                         .build())
+                .header(HttpHeaders.AUTHORIZATION, authorization)
                 .retrieve()
                 .body(BackendTemplateResponse.class);
     }
@@ -52,7 +55,8 @@ public class HttpTemplateBackendClient implements TemplateBackendClient {
     public TopologyInfoTableResponse getTableStructure(
             String sourceName,
             String schemaName,
-            String tableName) {
+            String tableName,
+            String authorization) {
         return restClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/mid/query/topology/structureTable")
@@ -60,12 +64,16 @@ public class HttpTemplateBackendClient implements TemplateBackendClient {
                         .queryParam("tableName", tableName)
                         .queryParam("sourceName", sourceName)
                         .build())
+                .header(HttpHeaders.AUTHORIZATION, authorization)
                 .retrieve()
                 .body(TopologyInfoTableResponse.class);
     }
 
     @Override
-    public QueryExecution executeTemplate(QueryType queryType, JsonNode executionPayload) {
+    public QueryExecution executeTemplate(
+            QueryType queryType,
+            JsonNode executionPayload,
+            String authorization) {
         String path = switch (queryType) {
             case QUERY -> "/mid/query/executeQuery";
             case CROSS -> "/mid/query/executeCrossQuery";
@@ -73,13 +81,19 @@ public class HttpTemplateBackendClient implements TemplateBackendClient {
 
         return restClient.post()
                 .uri(path)
+                .header(HttpHeaders.AUTHORIZATION, authorization)
                 .body(executionPayload)
                 .retrieve()
                 .body(QueryExecution.class);
     }
 
     @Override
-    public QueryResult getQueryResult(UUID resultId, QueryType queryType, int offset, int limit) {
+    public QueryResult getQueryResult(
+            UUID resultId,
+            QueryType queryType,
+            int offset,
+            int limit,
+            String authorization) {
         QueryResultRequest request = new QueryResultRequest(limit, offset, resultId);
         String path = switch (queryType) {
             case QUERY -> "/mid/query/result";
@@ -88,6 +102,7 @@ public class HttpTemplateBackendClient implements TemplateBackendClient {
 
         return restClient.post()
                 .uri(path)
+                .header(HttpHeaders.AUTHORIZATION, authorization)
                 .body(request)
                 .exchange((httpRequest, response) -> {
                     int httpStatus = response.getStatusCode().value();

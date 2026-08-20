@@ -9,6 +9,7 @@ import com.example.searchenginemcp.service.TemplateExecutionService;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
@@ -42,8 +43,13 @@ public class TemplateTools {
             @ToolParam(
                     description = "Zero-based pagination offset. Defaults to 0.",
                     required = false)
-            Integer offset) {
-        return templateService.listTemplates(Boolean.TRUE.equals(personal), limit, offset);
+            Integer offset,
+            ToolContext toolContext) {
+        return templateService.listTemplates(
+                Boolean.TRUE.equals(personal),
+                limit,
+                offset,
+                McpRequestAuthorization.requireBearerToken(toolContext));
     }
 
     @Tool(description = """
@@ -54,8 +60,11 @@ public class TemplateTools {
             """)
     public TemplateExecutionSchema getQueryTemplateParameters(
             @ToolParam(description = "UUID of the saved query template.")
-            UUID templateId) {
-        return templateService.getExecutionSchema(templateId);
+            UUID templateId,
+            ToolContext toolContext) {
+        return templateService.getExecutionSchema(
+                templateId,
+                McpRequestAuthorization.requireBearerToken(toolContext));
     }
 
     @Tool(description = """
@@ -71,8 +80,12 @@ public class TemplateTools {
                     Values keyed by parameter key from the template schema.
                     Each value must be an array of non-blank strings.
                     """)
-            Map<String, List<String>> parameters) {
-        return templateService.execute(templateId, parameters);
+            Map<String, List<String>> parameters,
+            ToolContext toolContext) {
+        return templateService.execute(
+                templateId,
+                parameters,
+                McpRequestAuthorization.requireBearerToken(toolContext));
     }
 
     @Tool(description = """
@@ -94,7 +107,13 @@ public class TemplateTools {
             @ToolParam(
                     description = "Number of rows to return, from 1 to 100. Defaults to 20.",
                     required = false)
-            Integer limit) {
-        return templateService.getResult(resultId, queryType, offset, limit);
+            Integer limit,
+            ToolContext toolContext) {
+        return templateService.getResult(
+                resultId,
+                queryType,
+                offset,
+                limit,
+                McpRequestAuthorization.requireBearerToken(toolContext));
     }
 }

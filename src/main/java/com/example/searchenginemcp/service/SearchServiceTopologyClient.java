@@ -4,5 +4,5 @@ import com.example.searchenginemcp.dto.AvailableSourcesResult;
 
 public interface SearchServiceTopologyClient {
 
-    AvailableSourcesResult getSources();
+    AvailableSourcesResult getSources(String authorization);
 }

@@ -29,6 +29,7 @@ class TemplateExecutionServiceTest {
 
     private static final UUID TEMPLATE_ID = UUID.randomUUID();
     private static final UUID RESULT_ID = UUID.randomUUID();
+    private static final String AUTHORIZATION = "Bearer test.jwt.token";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private RecordingTemplateBackendClient backendClient;
@@ -46,7 +47,7 @@ class TemplateExecutionServiceTest {
 
     @Test
     void extractsEmptyUnlockedFiltersRecursively() {
-        TemplateExecutionSchema schema = service.getExecutionSchema(TEMPLATE_ID);
+        TemplateExecutionSchema schema = service.getExecutionSchema(TEMPLATE_ID, AUTHORIZATION);
 
         assertEquals("User events", schema.name());
         assertEquals(QueryType.QUERY, schema.queryType());
@@ -61,7 +62,8 @@ class TemplateExecutionServiceTest {
                 TEMPLATE_ID,
                 Map.of(
                         "where.filters[0]", List.of("ivanov"),
-                        "where.filters[1].filters[0]", List.of("10.0.0.1")));
+                        "where.filters[1].filters[0]", List.of("10.0.0.1")),
+                AUTHORIZATION);
 
         assertEquals(RESULT_ID, execution.resultId());
         assertEquals(QueryType.QUERY, execution.queryType());
@@ -105,6 +107,7 @@ class TemplateExecutionServiceTest {
         assertEquals("log_armatm_src_distr", backendClient.structureSchemaName);
         assertEquals("parsed", backendClient.structureTableName);
         assertEquals(QueryType.QUERY, backendClient.executeQueryType);
+        assertEquals(AUTHORIZATION, backendClient.authorization);
     }
 
     @Test
@@ -115,7 +118,8 @@ class TemplateExecutionServiceTest {
                 TEMPLATE_ID,
                 Map.of(
                         "where.filters[0]", List.of("ivanov"),
-                        "where.filters[1].filters[0]", List.of("10.0.0.1")));
+                        "where.filters[1].filters[0]", List.of("10.0.0.1")),
+                AUTHORIZATION);
 
         assertEquals(QueryType.CROSS, execution.queryType());
         assertEquals(QueryType.CROSS, backendClient.executeQueryType);
@@ -131,7 +135,8 @@ class TemplateExecutionServiceTest {
                         TEMPLATE_ID,
                         Map.of(
                                 "where.filters[0]", List.of(""),
-                                "where.filters[1].filters[0]", List.of("10.0.0.1"))));
+                                "where.filters[1].filters[0]", List.of("10.0.0.1")),
+                        AUTHORIZATION));
 
         assertTrue(error.getMessage().contains("where.filters[0]"));
     }
@@ -142,21 +147,23 @@ class TemplateExecutionServiceTest {
                 IllegalArgumentException.class,
                 () -> service.execute(
                         TEMPLATE_ID,
-                        Map.of("unknown", List.of("value"))));
+                        Map.of("unknown", List.of("value")),
+                        AUTHORIZATION));
 
         assertTrue(error.getMessage().contains("unknown"));
     }
 
     @Test
     void clampsTemplateAndResultPagination() {
-        service.listTemplates(false, 1000, -10);
-        service.getResult(RESULT_ID, QueryType.CROSS, -20, 1000);
+        service.listTemplates(false, 1000, -10, AUTHORIZATION);
+        service.getResult(RESULT_ID, QueryType.CROSS, -20, 1000, AUTHORIZATION);
 
         assertEquals(50, backendClient.listRequest.limit());
         assertEquals(0, backendClient.listRequest.offset());
         assertEquals(0, backendClient.resultOffset);
         assertEquals(100, backendClient.resultLimit);
         assertEquals(QueryType.CROSS, backendClient.resultQueryType);
+        assertEquals(AUTHORIZATION, backendClient.authorization);
     }
 
     private static JsonNode template() {
@@ -230,15 +237,20 @@ class TemplateExecutionServiceTest {
         private int resultOffset;
         private int resultLimit;
         private QueryType resultQueryType;
+        private String authorization;
 
         @Override
-        public TemplateListResponse listTemplates(TemplateListRequest request) {
+        public TemplateListResponse listTemplates(
+                TemplateListRequest request,
+                String authorization) {
+            this.authorization = authorization;
             listRequest = request;
             return new TemplateListResponse(200, null, 0, List.of());
         }
 
         @Override
-        public BackendTemplateResponse getTemplate(UUID templateId) {
+        public BackendTemplateResponse getTemplate(UUID templateId, String authorization) {
+            this.authorization = authorization;
             return new BackendTemplateResponse(
                     template(),
                     new TemplateMetaInfo(
@@ -253,7 +265,9 @@ class TemplateExecutionServiceTest {
         public TopologyInfoTableResponse getTableStructure(
                 String sourceName,
                 String schemaName,
-                String tableName) {
+                String tableName,
+                String authorization) {
+            this.authorization = authorization;
             structureRequests++;
             structureSourceName = sourceName;
             structureSchemaName = schemaName;
@@ -281,7 +295,11 @@ class TemplateExecutionServiceTest {
         }
 
         @Override
-        public QueryExecution executeTemplate(QueryType queryType, JsonNode template) {
+        public QueryExecution executeTemplate(
+                QueryType queryType,
+                JsonNode template,
+                String authorization) {
+            this.authorization = authorization;
             executeQueryType = queryType;
             filledTemplate = template;
             return new QueryExecution(RESULT_ID, TEMPLATE_ID, null, "QUEUED", null);
@@ -292,7 +310,9 @@ class TemplateExecutionServiceTest {
                 UUID resultId,
                 QueryType queryType,
                 int offset,
-                int limit) {
+                int limit,
+                String authorization) {
+            this.authorization = authorization;
             resultOffset = offset;
             resultLimit = limit;
             resultQueryType = queryType;
