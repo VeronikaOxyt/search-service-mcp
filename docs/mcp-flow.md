@@ -81,15 +81,58 @@ listSearchServiceSources
 | Search Service Backend | Содержит реальные данные и бизнес-логику |
 | MCP | Определяет стандарт обмена между клиентом и сервером |
 
+## Проксирование через KitAI Core: проблема разных СУДов
+
+KitAI Core может получить список инструментов SCSE MCP и опубликовать их через
+свой MCP-сервер. Проблема возникает при вызове инструмента от имени пользователя:
+JWT, выпущенный СУД KitAI, не является JWT, которому доверяет SCSE IAM Proxy.
+
+```mermaid
+sequenceDiagram
+    autonumber
+
+    actor User as Пользователь
+    participant KitaiSUD as СУД KitAI
+    participant Agent as ИИ-агент
+    participant Core as KitAI Core / MCP Proxy
+    participant ScseMCP as SCSE MCP-сервер
+    participant ScseIAM as SCSE IAM Proxy
+    participant Backend as SCSE Backend
+
+    User->>KitaiSUD: Вход в KitAI
+    KitaiSUD-->>Agent: JWT KitAI
+
+    User->>Agent: Выполни шаблон
+    Agent->>Core: tools/call executeQueryTemplate
+
+    Note over Agent,Core: Пользователь аутентифицирован<br/>только в СУД KitAI
+
+    Core->>ScseMCP: tools/call<br/>Authorization: Bearer JWT KitAI
+
+    Note over ScseMCP: SCSE MCP не изменяет токен
+
+    ScseMCP->>ScseIAM: Запрос к SCSE Backend<br/>Authorization: Bearer JWT KitAI
+
+    ScseIAM--xScseMCP: 401 / 403<br/>Токен выпущен чужим СУД
+
+    Note over ScseIAM,Backend: SCSE Backend не вызывается
+```
+
+KitAI Core не может самостоятельно выпустить JWT SCSE: для этого необходим
+доверенный SCSE issuer и его закрытый ключ. Для сохранения пользовательской
+идентичности требуется согласованный механизм федерации, Token Exchange /
+On-Behalf-Of или отдельная аутентификация пользователя в СУД SCSE.
+
 ## Текущая конфигурация
 
 MCP-сервер запускается на порту `8081` и по умолчанию обращается к backend по адресу `http://localhost:8080`.
 
-Текущий HTTP/SSE transport:
+Текущий Streamable HTTP transport:
 
 ```text
-GET  /sse
-POST /mcp/message
+POST   /mcp
+GET    /mcp
+DELETE /mcp
 ```
 
 Внутренний путь вызова:
