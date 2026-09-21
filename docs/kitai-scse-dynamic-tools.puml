@@ -21,12 +21,7 @@ Core -> MCP : tools/list\nAuthorization: Bearer JWT
 
 MCP -> Auth : Проверить подпись, issuer,\naudience и срок действия JWT
 
-alt JWT отсутствует или невалиден
-    Auth --> MCP : Ошибка аутентификации
-    MCP --> Core : 401 Unauthorized
-    Core --> User : Требуется аутентификация
-
-else JWT валиден
+alt Позитивный сценарий: JWT валиден
     Auth --> MCP : Пользователь и его роли
 
     MCP -> Backend : GET /mid/mcp/templates/available\nAuthorization: Bearer JWT\n\nНазвание endpoint условное
@@ -36,13 +31,23 @@ else JWT валиден
 
     Backend --> MCP : Список разрешённых шаблонов\nс templateId и схемами параметров
 
-    MCP -> Registry : Сформировать динамические tools\nдля разрешённых шаблонов
+    alt Позитивный сценарий: доступные шаблоны найдены
+        MCP -> Registry : Сформировать динамические tools\nдля разрешённых шаблонов
 
-    Registry --> MCP : tool-A -> template-A\ntool-B -> template-B
+        Registry --> MCP : tool-A -> template-A\ntool-B -> template-B
 
-    MCP --> Core : tools/list\n[tool-A, tool-B]
+        MCP --> Core : tools/list\n[tool-A, tool-B]
 
-    Core --> User : Показать только доступные tools
+        Core --> User : Показать только доступные tools
+    else У пользователя нет доступных MCP-шаблонов
+        MCP --> Core : tools/list\n[]
+        Core --> User : Доступные tools отсутствуют
+    end
+
+else Негативный сценарий: JWT отсутствует или невалиден
+    Auth --> MCP : Ошибка аутентификации
+    MCP --> Core : 401 Unauthorized
+    Core --> User : Требуется аутентификация
 end
 
 == Вызов выбранного tool ==
@@ -53,11 +58,7 @@ Core -> MCP : tools/call tool-A\nAuthorization: Bearer JWT
 
 MCP -> Auth : Повторно проверить JWT
 
-alt JWT невалиден
-    Auth --> MCP : Ошибка аутентификации
-    MCP --> Core : 401 Unauthorized
-
-else JWT валиден
+alt Позитивный сценарий: JWT валиден
     Auth --> MCP : Пользователь и его роли
 
     MCP -> Registry : Найти templateId для tool-A
@@ -65,11 +66,7 @@ else JWT валиден
 
     MCP -> Backend : Проверить доступность template-A\nили использовать короткий персональный кэш\nAuthorization: Bearer JWT
 
-    alt Шаблон больше не доступен пользователю
-        Backend --> MCP : Доступ запрещён
-        MCP --> Core : 403 Forbidden
-
-    else Шаблон доступен
+    alt Позитивный сценарий: шаблон доступен
         Backend --> MCP : Доступ разрешён
 
         MCP -> Backend : Выполнить template-A\nAuthorization: Bearer JWT
@@ -79,7 +76,14 @@ else JWT валиден
 
         MCP --> Core : MCP tool result
         Core --> User : Результат выполнения
+    else Негативный сценарий: шаблон больше не доступен
+        Backend --> MCP : Доступ запрещён
+        MCP --> Core : 403 Forbidden
     end
+
+else Негативный сценарий: JWT отсутствует или невалиден
+    Auth --> MCP : Ошибка аутентификации
+    MCP --> Core : 401 Unauthorized
 end
 
 note over Core,MCP
