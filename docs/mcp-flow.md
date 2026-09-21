@@ -81,47 +81,20 @@ listSearchServiceSources
 | Search Service Backend | Содержит реальные данные и бизнес-логику |
 | MCP | Определяет стандарт обмена между клиентом и сервером |
 
-## Проксирование через KitAI Core: проблема разных СУДов
+## Проксирование через KitAI Core и динамические tools
 
-KitAI Core может получить список инструментов SCSE MCP и опубликовать их через
-свой MCP-сервер. Проблема возникает при вызове инструмента от имени пользователя:
-JWT, выпущенный СУД KitAI, не является JWT, которому доверяет SCSE IAM Proxy.
+KitAI Core запрашивает `tools/list` с JWT конкретного пользователя. SCSE MCP
+проверяет JWT и получает из SCSE Backend список публичных шаблонов,
+задекларированных для MCP и доступных этому пользователю. Каждый разрешённый
+шаблон публикуется как отдельный динамический MCP-tool.
 
-```mermaid
-sequenceDiagram
-    autonumber
+При `tools/call` JWT и доступ к шаблону проверяются повторно, после чего MCP
+передаёт запрос в защищённый endpoint SCSE Backend с тем же пользовательским
+контекстом.
 
-    actor User as Пользователь
-    participant KitaiSUD as СУД KitAI
-    participant Agent as ИИ-агент
-    participant Core as KitAI Core / MCP Proxy
-    participant ScseMCP as SCSE MCP-сервер
-    participant ScseIAM as SCSE IAM Proxy
-    participant Backend as SCSE Backend
+Полная PlantUML-схема взаимодействия:
 
-    User->>KitaiSUD: Вход в KitAI
-    KitaiSUD-->>Agent: JWT KitAI
-
-    User->>Agent: Выполни шаблон
-    Agent->>Core: tools/call executeQueryTemplate
-
-    Note over Agent,Core: Пользователь аутентифицирован<br/>только в СУД KitAI
-
-    Core->>ScseMCP: tools/call<br/>Authorization: Bearer JWT KitAI
-
-    Note over ScseMCP: SCSE MCP не изменяет токен
-
-    ScseMCP->>ScseIAM: Запрос к SCSE Backend<br/>Authorization: Bearer JWT KitAI
-
-    ScseIAM--xScseMCP: 401 / 403<br/>Токен выпущен чужим СУД
-
-    Note over ScseIAM,Backend: SCSE Backend не вызывается
-```
-
-KitAI Core не может самостоятельно выпустить JWT SCSE: для этого необходим
-доверенный SCSE issuer и его закрытый ключ. Для сохранения пользовательской
-идентичности требуется согласованный механизм федерации, Token Exchange /
-On-Behalf-Of или отдельная аутентификация пользователя в СУД SCSE.
+- [`kitai-scse-dynamic-tools.puml`](kitai-scse-dynamic-tools.puml)
 
 ## Текущая конфигурация
 

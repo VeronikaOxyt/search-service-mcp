@@ -1,0 +1,101 @@
+@startuml
+title Персональный список динамических MCP-tools и выполнение шаблона SCSE
+
+autonumber
+
+actor "Пользователь" as User
+participant "KitAI Core\nMCP Proxy" as Core
+
+box "Контур SCSE"
+    participant "SCSE MCP" as MCP
+    participant "JWT-аутентификация\nи ролевая библиотека SCSE" as Auth
+    database "Реестр динамических MCP-tools\n(tool <-> templateId)" as Registry
+    participant "SCSE Backend" as Backend
+end box
+
+== Получение доступных пользователю tools ==
+
+User -> Core : Открывает список доступных инструментов
+
+Core -> MCP : tools/list\nAuthorization: Bearer JWT
+
+MCP -> Auth : Проверить подпись, issuer,\naudience и срок действия JWT
+
+alt JWT отсутствует или невалиден
+    Auth --> MCP : Ошибка аутентификации
+    MCP --> Core : 401 Unauthorized
+    Core --> User : Требуется аутентификация
+
+else JWT валиден
+    Auth --> MCP : Пользователь и его роли
+
+    MCP -> Backend : GET /mid/mcp/templates/available\nAuthorization: Bearer JWT\n\nНазвание endpoint условное
+
+    Backend -> Backend : Проверить JWT и роли пользователя
+    Backend -> Backend : Выбрать публичные шаблоны,\nзадекларированные для MCP\nи доступные пользователю
+
+    Backend --> MCP : Список разрешённых шаблонов\nс templateId и схемами параметров
+
+    MCP -> Registry : Сформировать динамические tools\nдля разрешённых шаблонов
+
+    Registry --> MCP : tool-A -> template-A\ntool-B -> template-B
+
+    MCP --> Core : tools/list\n[tool-A, tool-B]
+
+    Core --> User : Показать только доступные tools
+end
+
+== Вызов выбранного tool ==
+
+User -> Core : Вызвать tool-A
+
+Core -> MCP : tools/call tool-A\nAuthorization: Bearer JWT
+
+MCP -> Auth : Повторно проверить JWT
+
+alt JWT невалиден
+    Auth --> MCP : Ошибка аутентификации
+    MCP --> Core : 401 Unauthorized
+
+else JWT валиден
+    Auth --> MCP : Пользователь и его роли
+
+    MCP -> Registry : Найти templateId для tool-A
+    Registry --> MCP : template-A
+
+    MCP -> Backend : Проверить доступность template-A\nили использовать короткий персональный кэш\nAuthorization: Bearer JWT
+
+    alt Шаблон больше не доступен пользователю
+        Backend --> MCP : Доступ запрещён
+        MCP --> Core : 403 Forbidden
+
+    else Шаблон доступен
+        Backend --> MCP : Доступ разрешён
+
+        MCP -> Backend : Выполнить template-A\nAuthorization: Bearer JWT
+
+        Backend -> Backend : Повторно проверить авторизацию\nна защищённом endpoint
+        Backend --> MCP : resultId / результат выполнения
+
+        MCP --> Core : MCP tool result
+        Core --> User : Результат выполнения
+    end
+end
+
+note over Core,MCP
+KitAI Core передаёт пользовательский JWT
+при tools/list и tools/call.
+
+Персональный список нельзя
+кэшировать глобально для всех пользователей.
+end note
+
+note over MCP,Backend
+SCSE Backend остаётся источником истины:
+он определяет доступные пользователю шаблоны.
+
+SCSE MCP не хранит копию ролевой модели,
+а создаёт tool для каждого разрешённого templateId.
+end note
+
+@enduml
