@@ -96,6 +96,10 @@ KitAI Core запрашивает `tools/list` с JWT конкретного п�
 
 - [`kitai-scse-dynamic-tools.puml`](kitai-scse-dynamic-tools.puml)
 
+Компактная схема только с позитивным сценарием для презентации:
+
+- [`kitai-scse-dynamic-tools-positive.puml`](kitai-scse-dynamic-tools-positive.puml)
+
 ## Текущая конфигурация
 
 MCP-сервер запускается на порту `8081` и по умолчанию обращается к backend по адресу `http://localhost:8080`.

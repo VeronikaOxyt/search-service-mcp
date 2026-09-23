@@ -1,0 +1,59 @@
+@startuml
+title SCSE MCP: позитивный сценарий работы динамических tools
+
+autonumber
+
+actor "Пользователь" as User
+participant "KitAI Core\nMCP Proxy" as Core
+
+box "Контур SCSE"
+    participant "SCSE MCP" as MCP
+    participant "JWT-аутентификация\nи ролевая модель SCSE" as Auth
+    participant "SCSE Backend" as Backend
+end box
+
+== Получение персонального списка tools ==
+
+User -> Core : Запросить доступные инструменты
+Core -> MCP : tools/list\nAuthorization: Bearer JWT
+
+MCP -> Auth : Проверить JWT
+Auth --> MCP : Пользователь аутентифицирован\nРоли определены
+
+MCP -> Backend : Получить доступные MCP-шаблоны\nAuthorization: Bearer JWT
+Backend -> Backend : Отобрать публичные шаблоны,\nразрешённые ролями пользователя
+Backend --> MCP : template-A, template-B\n+ схемы параметров
+
+MCP -> MCP : Создать динамический tool\nдля каждого разрешённого шаблона
+MCP --> Core : tools/list\n[tool-A, tool-B]
+Core --> User : Показать доступные инструменты
+
+== Вызов динамического tool ==
+
+User -> Core : Вызвать tool-A
+Core -> MCP : tools/call tool-A + параметры\nAuthorization: Bearer JWT
+
+MCP -> Auth : Повторно проверить JWT
+Auth --> MCP : JWT валиден
+
+MCP -> MCP : Проверить tool-A\nв персональном каталоге\ntool-A -> template-A
+
+MCP -> Backend : Выполнить template-A\nAuthorization: Bearer JWT
+Backend -> Backend : Повторно проверить JWT, роли\nи доступ к template-A
+Backend --> MCP : resultId / результат
+
+MCP --> Core : MCP tool result
+Core --> User : Результат выполнения
+
+note over Core,MCP
+JWT передаётся при tools/list и tools/call.
+KitAI получает только разрешённые пользователю tools.
+end note
+
+note over MCP,Backend
+Каждый разрешённый шаблон публикуется
+как отдельный динамический MCP-tool.
+SCSE Backend остаётся источником истины по доступу.
+end note
+
+@enduml
