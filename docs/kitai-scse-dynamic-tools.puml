@@ -4,6 +4,7 @@ title Персональный список динамических MCP-tools �
 autonumber
 
 actor "Пользователь" as User
+participant "ИИ-агент" as Agent
 participant "KitAI Core\nMCP Proxy" as Core
 
 box "Контур SCSE"
@@ -15,8 +16,9 @@ end box
 
 == Получение доступных пользователю tools ==
 
-User -> Core : Открывает список доступных инструментов
+User -> Agent : Формулирует запрос
 
+Agent -> Core : Запросить доступные инструменты
 Core -> MCP : tools/list\nAuthorization: Bearer JWT
 
 MCP -> Auth : Проверить подпись, issuer,\naudience и срок действия JWT
@@ -38,22 +40,24 @@ alt Позитивный сценарий: JWT валиден
 
         MCP --> Core : tools/list\n[tool-A, tool-B]
 
-        Core --> User : Показать только доступные tools
+        Core --> Agent : Доступные tools\n[tool-A, tool-B]
+        Agent -> Agent : Выбрать подходящий tool-A\nпо запросу пользователя
     else У пользователя нет доступных MCP-шаблонов
         MCP --> Core : tools/list\n[]
-        Core --> User : Доступные tools отсутствуют
+        Core --> Agent : Доступные tools отсутствуют
+        Agent --> User : Сообщить, что подходящие\nинструменты недоступны
     end
 
 else Негативный сценарий: JWT отсутствует или невалиден
     Auth --> MCP : Ошибка аутентификации
     MCP --> Core : 401 Unauthorized
-    Core --> User : Требуется аутентификация
+    Core --> Agent : Требуется аутентификация
+    Agent --> User : Сообщить об ошибке аутентификации
 end
 
 == Вызов выбранного tool ==
 
-User -> Core : Вызвать tool-A
-
+Agent -> Core : Вызвать tool-A\nс параметрами из запроса
 Core -> MCP : tools/call tool-A\nAuthorization: Bearer JWT
 
 MCP -> Auth : Повторно проверить JWT
@@ -75,15 +79,21 @@ alt Позитивный сценарий: JWT валиден
         Backend --> MCP : resultId / результат выполнения
 
         MCP --> Core : MCP tool result
-        Core --> User : Результат выполнения
+        Core --> Agent : MCP tool result
+        Agent -> Agent : Интерпретировать результат
+        Agent --> User : Человекочитаемый ответ
     else Негативный сценарий: шаблон больше не доступен
         Backend --> MCP : Доступ запрещён
         MCP --> Core : 403 Forbidden
+        Core --> Agent : Tool недоступен пользователю
+        Agent --> User : Сообщить об отсутствии доступа
     end
 
 else Негативный сценарий: JWT отсутствует или невалиден
     Auth --> MCP : Ошибка аутентификации
     MCP --> Core : 401 Unauthorized
+    Core --> Agent : Требуется аутентификация
+    Agent --> User : Сообщить об ошибке аутентификации
 end
 
 note over Core,MCP
@@ -92,6 +102,12 @@ KitAI Core передаёт пользовательский JWT
 
 Персональный список нельзя
 кэшировать глобально для всех пользователей.
+end note
+
+note over User,Agent
+Пользователь не вызывает MCP напрямую.
+С MCP через KitAI Core взаимодействует ИИ-агент.
+Все операции выполняются в контексте пользователя.
 end note
 
 note over MCP,Backend

@@ -4,6 +4,7 @@ title SCSE MCP: позитивный сценарий работы динами�
 autonumber
 
 actor "Пользователь" as User
+participant "ИИ-агент" as Agent
 participant "KitAI Core\nMCP Proxy" as Core
 
 box "Контур SCSE"
@@ -14,7 +15,8 @@ end box
 
 == Получение персонального списка tools ==
 
-User -> Core : Запросить доступные инструменты
+User -> Agent : Сформулировать запрос
+Agent -> Core : Запросить доступные инструменты
 Core -> MCP : tools/list\nAuthorization: Bearer JWT
 
 MCP -> Auth : Проверить JWT
@@ -26,11 +28,12 @@ Backend --> MCP : template-A, template-B\n+ схемы параметров
 
 MCP -> MCP : Создать динамический tool\nдля каждого разрешённого шаблона
 MCP --> Core : tools/list\n[tool-A, tool-B]
-Core --> User : Показать доступные инструменты
+Core --> Agent : Доступные tools\n[tool-A, tool-B]
+Agent -> Agent : Выбрать подходящий tool-A\nпо запросу пользователя
 
 == Вызов динамического tool ==
 
-User -> Core : Вызвать tool-A
+Agent -> Core : Вызвать tool-A\nс параметрами из запроса
 Core -> MCP : tools/call tool-A + параметры\nAuthorization: Bearer JWT
 
 MCP -> Auth : Повторно проверить JWT
@@ -43,11 +46,19 @@ Backend -> Backend : Повторно проверить JWT, роли\nи до�
 Backend --> MCP : resultId / результат
 
 MCP --> Core : MCP tool result
-Core --> User : Результат выполнения
+Core --> Agent : MCP tool result
+Agent -> Agent : Интерпретировать результат
+Agent --> User : Человекочитаемый ответ
 
 note over Core,MCP
 JWT передаётся при tools/list и tools/call.
 KitAI получает только разрешённые пользователю tools.
+end note
+
+note over User,Agent
+Пользователь не вызывает MCP напрямую.
+С MCP через KitAI Core взаимодействует ИИ-агент.
+Все операции выполняются в контексте пользователя.
 end note
 
 note over MCP,Backend
