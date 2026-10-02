@@ -1,132 +1,100 @@
 @startuml
-title Аутентификация и авторизация динамических SCSE MCP-tools
+title Техническое взаимодействие KitAI Core, SCSE MCP и scse-mid
 
 autonumber
 
-actor "Пользователь" as User
-participant "ИИ-агент" as Agent
-participant "KitAI Core\nMCP Proxy" as Core
+participant "Agent Runtime" as Agent
+participant "KitAI Core\nMCP Client / Proxy" as Core
 
 box "Контур SCSE"
-    participant "SCSE MCP" as MCP
-    participant "Общая библиотека\nmcp-security-starter" as Security
-    participant "SCSE Authorization\nEngine" as Authorization
-    database "Политики доступа SCSE\nuser × agent × surface × tool" as Policies
-    database "Реестр динамических MCP-tools\n(tool <-> templateId)" as Registry
-    participant "SCSE Backend" as Backend
+    participant "SCSE MCP Server\n<<black box>>" as MCP
+    participant "mcp-security-starter\n<<library / black box>>" as Security
+    participant "scse-mid\n<<SCSE Backend service>>" as ScseMid
 end box
 
-participant "Системы управления доступом\nAI HUB / СУДИР / поверхность" as IAM
+participant "СУД AI HUB" as AiHubIam
+participant "СУДИР" as SudirIam
+participant "СУД поверхности\nTBD" as SurfaceIam
 
-== Получение доступных tools ==
+== Формирование доверенной конфигурации ==
 
-User -> Agent : Формулирует запрос
-Agent -> Core : Запросить доступные инструменты
+Security -> AiHubIam : issuer / JWKS / claims contract
+AiHubIam --> Security : параметры проверки AI HUB JWT
 
-Core -> MCP : tools/list\nAI HUB JWT [опционально]\nСУДИР JWT [обязательно]\nSurface JWT [контракт TBD]\nAgentInfo [формат TBD]
+Security -> SudirIam : issuer / JWKS / claims contract
+SudirIam --> Security : параметры проверки СУДИР JWT
 
-MCP -> Security : Принять и проверить\nsecurity-контекст запроса
+Security -> SurfaceIam : issuer / JWKS / claims contract [TBD]
+SurfaceIam --> Security : параметры проверки Surface JWT [TBD]
 
-Security -> IAM : Проверить подписи и claims\nкаждого JWT по своему issuer/JWKS
-IAM --> Security : Результаты проверки JWT
+== Получение персонального списка tools ==
 
-Security -> Security : Разобрать AgentInfo\nи связать идентичности
+Agent -> Core : MCP-операция + AgentInfo
 
-alt Контекст аутентифицирован
-    Security --> MCP : McpCallerContext\nuserId + roles\nagentId + surfaceId\ncore identity [если есть]
+Core -> MCP : tools/list\nAI HUB JWT [опционально]\nСУДИР JWT [обязательно]\nSurface JWT [TBD]\nAgentInfo [TBD]
 
-    MCP -> Registry : Получить все шаблоны,\nзадекларированные как MCP-tools
-    Registry --> MCP : Кандидаты tool-A, tool-B, tool-C
+MCP -> Security : authenticate(SecurityEnvelope)
 
-    MCP -> Authorization : Отфильтровать tools\nпо McpCallerContext
-    Authorization -> Policies : evaluate(user, agent, surface,\ntool, action=LIST)
-    Policies --> Authorization : permit / deny для каждого tool
-    Authorization --> MCP : Разрешены tool-A, tool-B
+alt SecurityEnvelope валиден
+    Security --> MCP : McpCallerContext
 
-    MCP --> Core : tools/list\n[tool-A, tool-B]
-    Core --> Agent : Доступные tools\n[tool-A, tool-B]
-    Agent -> Agent : Выбрать подходящий tool\nпо запросу пользователя
+    note over MCP
+    Внутри чёрного ящика SCSE MCP:
+    проверка user × agent × surface × tool
+    и формирование разрешённого списка tools.
+    end note
 
-else Один из обязательных токенов отсутствует\nили security-контекст невалиден
-    Security --> MCP : Ошибка аутентификации
+    MCP --> Core : tools/list\nтолько разрешённые tools
+    Core --> Agent : доступный каталог tools
+
+else SecurityEnvelope невалиден
+    Security --> MCP : authentication error
     MCP --> Core : 401 Unauthorized
-    Core --> Agent : Требуется аутентификация
-    Agent --> User : Сообщить об ошибке
 end
 
-== Вызов выбранного tool ==
+== Вызов динамического tool ==
 
-Agent -> Core : Вызвать tool-A\nс параметрами из запроса
+Agent -> Core : tools/call + AgentInfo + параметры
 
-Core -> MCP : tools/call tool-A + параметры\nAI HUB JWT [опционально]\nСУДИР JWT [обязательно]\nSurface JWT [контракт TBD]\nAgentInfo [формат TBD]
+Core -> MCP : tools/call tool-A\nте же JWT + AgentInfo
 
-MCP -> Security : Повторно проверить\nsecurity-контекст запроса
-Security -> IAM : Проверить JWT
-IAM --> Security : JWT валидны
-Security --> MCP : McpCallerContext
+MCP -> Security : authenticate(SecurityEnvelope)
 
-MCP -> Registry : Найти templateId для tool-A
-Registry --> MCP : template-A
+alt Контекст аутентифицирован\nи вызов tool разрешён
+    Security --> MCP : McpCallerContext
 
-MCP -> Authorization : Проверить вызов tool-A\nдля McpCallerContext
-Authorization -> Policies : evaluate(user, agent, surface,\ntool-A, action=CALL)
+    MCP -> Security : backendAuthorization(scse-mid)
+    Security --> MCP : Authorization: Bearer <СУДИР JWT>
 
-alt Доступ разрешён
-    Policies --> Authorization : permit
-    Authorization --> MCP : permit
-
-    MCP -> Security : Подготовить исходящий запрос\nк SCSE Backend
-    Security --> MCP : Подложить только СУДИР JWT\nв Authorization header
-
-    MCP -> Backend : Выполнить template-A\nAuthorization: Bearer <СУДИР JWT>
-    Backend -> Backend : Повторно проверить СУДИР JWT\nи защищённый backend endpoint
-    Backend --> MCP : resultId / результат
+    MCP -> ScseMid : REST: выполнить template-A\nAuthorization: Bearer <СУДИР JWT>
+    ScseMid -> ScseMid : Проверить СУДИР JWT\nи backend-права
+    ScseMid --> MCP : resultId / результат
 
     MCP --> Core : MCP tool result
-    Core --> Agent : Результат tool
-    Agent -> Agent : Интерпретировать результат
-    Agent --> User : Человекочитаемый ответ
+    Core --> Agent : результат tool
 
-else Доступ запрещён
-    Policies --> Authorization : deny
-    Authorization --> MCP : deny
-    MCP --> Core : MCP tool error\nAccess denied
-    Core --> Agent : Tool недоступен
-    Agent --> User : Сообщить об отсутствии доступа
+else Контекст невалиден\nили вызов tool запрещён
+    Security --> MCP : authentication error\nили McpCallerContext
+    MCP --> Core : 401 / MCP access denied error
 end
 
 note over Core,MCP
-Имена HTTP-заголовков и обязательность Surface JWT
-должны быть закреплены интеграционным контрактом.
+Три JWT и AgentInfo передаются
+в HTTP security-контексте каждого MCP-запроса.
 
-Токены передаются в HTTP security-контексте,
-а не в аргументах MCP-tool.
+Точные заголовки и формат AgentInfo — TBD.
+JWT не являются аргументами MCP-tool.
 end note
 
-note over Security,Authorization
-mcp-security-starter скрывает техническую работу:
-приём, различение, валидацию и token relay.
-
-SCSE Authorization Engine принимает прикладное решение
-по совокупности user + agent + surface + tool.
+note over MCP,Security
+SCSE MCP и mcp-security-starter показаны
+как чёрные ящики. Их внутренняя структура
+на данной диаграмме не проектируется.
 end note
 
-note over Agent,Security
-AgentInfo нельзя считать доверенным только по agentId.
-Идентичность агента должна быть связана с подписанным JWT
-или с аутентифицированным каналом KitAI Core.
-Точный механизм пока TBD.
-end note
-
-note over Security,Backend
-В SCSE Backend передаётся только предназначенный ему
-СУДИР JWT. AI HUB JWT и Surface JWT
-не прокидываются автоматически.
-end note
-
-note over Security,Policies
-Общая библиотека не содержит SCSE-правил доступа
-и может переиспользоваться другими MCP-серверами.
+note over Security,ScseMid
+В scse-mid передаётся только СУДИР JWT.
+AI HUB JWT и Surface JWT не ретранслируются.
 end note
 
 @enduml

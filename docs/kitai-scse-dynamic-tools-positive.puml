@@ -1,79 +1,57 @@
 @startuml
-title SCSE MCP: проверка доступа и вызов динамического tool
+title SCSE MCP: позитивный технический сценарий интеграции
 
 autonumber
 
-actor "Пользователь" as User
-participant "ИИ-агент" as Agent
-participant "KitAI Core\nMCP Proxy" as Core
+participant "Agent Runtime" as Agent
+participant "KitAI Core\nMCP Client / Proxy" as Core
 
 box "Контур SCSE"
-    participant "SCSE MCP" as MCP
-    participant "Общая библиотека\nmcp-security-starter" as Security
-    participant "Проверка прав SCSE\nuser × agent × surface × tool" as Authorization
-    participant "SCSE Backend" as Backend
+    participant "SCSE MCP Server\n<<black box>>" as MCP
+    participant "mcp-security-starter\n<<library / black box>>" as Security
+    participant "scse-mid\n<<SCSE Backend service>>" as ScseMid
 end box
+
+participant "Системы управления доступом\nAI HUB / СУДИР / поверхность" as Iam
 
 == Получение персонального списка tools ==
 
-User -> Agent : Сформулировать запрос
-Agent -> Core : Запросить доступные инструменты
+Agent -> Core : Запрос + AgentInfo
+Core -> MCP : tools/list\n3 JWT + AgentInfo
 
-Core -> MCP : tools/list\n+ AI HUB JWT [опционально]\n+ СУДИР JWT\n+ Surface JWT [TBD]\n+ AgentInfo [TBD]
+MCP -> Security : authenticate(SecurityEnvelope)
+Security -> Iam : использовать доверенные issuer / JWKS
+Iam --> Security : параметры проверки JWT
+Security --> MCP : McpCallerContext
 
-MCP -> Security : Проверить security-контекст
-Security -> Security : Валидировать три JWT\nи сформировать McpCallerContext
-Security --> MCP : user + agent + surface + core
-
-MCP -> Authorization : Отобрать разрешённые tools
-Authorization --> MCP : tool-A, tool-B
-
-MCP --> Core : tools/list\n[tool-A, tool-B]
-Core --> Agent : Доступные tools
-Agent -> Agent : Выбрать tool-A
+MCP --> Core : tools/list\nтолько разрешённые tools
+Core --> Agent : доступный каталог tools
 
 == Вызов динамического tool ==
 
-Agent -> Core : Вызвать tool-A\nс параметрами
+Agent -> Core : tools/call + параметры
+Core -> MCP : tools/call\n3 JWT + AgentInfo
 
-Core -> MCP : tools/call tool-A\nте же JWT + AgentInfo
-
-MCP -> Security : Повторно проверить контекст
+MCP -> Security : authenticate(SecurityEnvelope)
 Security --> MCP : McpCallerContext
 
-MCP -> Authorization : Проверить доступ к tool-A
-Authorization --> MCP : permit
+MCP -> Security : backendAuthorization(scse-mid)
+Security --> MCP : Bearer <СУДИР JWT>
 
-MCP -> Security : Подготовить запрос в backend
-Security --> MCP : Authorization: Bearer <СУДИР JWT>
-
-MCP -> Backend : Выполнить template-A\nс СУДИР JWT
-Backend -> Backend : Повторно проверить JWT\nи backend-права
-Backend --> MCP : Результат выполнения
+MCP -> ScseMid : REST: выполнить шаблон\nAuthorization: Bearer <СУДИР JWT>
+ScseMid --> MCP : результат
 
 MCP --> Core : MCP tool result
-Core --> Agent : Результат tool
-Agent -> Agent : Интерпретировать результат
-Agent --> User : Человекочитаемый ответ
+Core --> Agent : результат tool
 
-note over Core,MCP
-Три JWT и AgentInfo передаются
-в HTTP security-контексте каждого MCP-запроса.
-Точные заголовки и формат AgentInfo — TBD.
+note over MCP,Security
+Оба компонента рассматриваются как чёрные ящики.
+SCSE MCP проверяет user × agent × surface × tool.
+Библиотека предоставляет security-контекст и token relay.
 end note
 
-note over Security,Authorization
-Библиотека отвечает за приём, проверку и token relay.
-SCSE MCP отвечает за прикладное решение о доступе.
-end note
-
-note over Agent,Security
-AgentInfo должен быть криптографически связан
-с доверенным токеном или каналом KitAI Core.
-end note
-
-note over Security,Backend
-В backend передаётся только СУДИР JWT.
+note over Security,ScseMid
+В backend-сервис scse-mid передаётся только СУДИР JWT.
 end note
 
 @enduml
