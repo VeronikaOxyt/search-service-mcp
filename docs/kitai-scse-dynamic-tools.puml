@@ -1,121 +1,134 @@
 @startuml
-title Персональный список динамических MCP-tools и выполнение шаблона SCSE
+title Проектная архитектура безопасности SCSE MCP
 
-autonumber
+left to right direction
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+skinparam shadowing false
 
 actor "Пользователь" as User
-participant "ИИ-агент" as Agent
-participant "KitAI Core\nMCP Proxy" as Core
 
-box "Контур SCSE"
-    participant "SCSE MCP" as MCP
-    participant "JWT-аутентификация\nи ролевая библиотека SCSE" as Auth
-    database "Реестр динамических MCP-tools\n(tool <-> templateId)" as Registry
-    participant "SCSE Backend" as Backend
-end box
+package "AI HUB" {
+    component "ИИ-агент" as Agent
+    component "KitAI Core\nMCP Proxy" as Core
+}
 
-== Получение доступных пользователю tools ==
+package "Общая библиотека\nmcp-security-starter" as SecurityLibrary {
+    component "Приём входного\nsecurity-контекста" as InboundSecurity
+    component "Валидатор JWT\nAI HUB" as CoreJwtValidator
+    component "Валидатор JWT\nСУДИР" as SudirJwtValidator
+    component "Валидатор JWT\nповерхности" as SurfaceJwtValidator
+    component "Разбор и проверка\nAgentInfo" as AgentInfoResolver
+    component "Фабрика\nMcpCallerContext" as ContextFactory
+    component "Token Relay\nдля исходящих запросов" as TokenRelay
+    component "Безопасное логирование\nбез значений токенов" as SecurityAudit
+}
 
-User -> Agent : Формулирует запрос
+package "SCSE MCP — отдельный сервис" as McpService {
+    component "Streamable HTTP\n/mcp" as McpEndpoint
+    component "Интеграция с\nmcp-security-starter" as SecurityAdapter
 
-Agent -> Core : Запросить доступные инструменты
-Core -> MCP : tools/list\nAuthorization: Bearer JWT
+    component "MCP Protocol Adapter\ntools/list, tools/call" as McpProtocol
+    component "SCSE Authorization Engine" as AuthorizationEngine
+    database "Политики доступа SCSE\nuser × agent × surface × tool\nреализация TBD" as PolicyRepository
 
-MCP -> Auth : Проверить подпись, issuer,\naudience и срок действия JWT
+    component "Каталог динамических tools\ntool <-> templateId" as ToolCatalog
+    component "Tool Dispatcher" as ToolDispatcher
+    component "SCSE Backend Client" as BackendClient
+}
 
-alt Позитивный сценарий: JWT валиден
-    Auth --> MCP : Пользователь и его роли
+package "SCSE Backend" as ScseBackend {
+    component "Backend JWT Security" as BackendSecurity
+    component "MCP Templates API" as TemplatesApi
+    component "Query Execution API" as QueryApi
+}
 
-    MCP -> Backend : GET /mid/mcp/templates/available\nAuthorization: Bearer JWT\n\nНазвание endpoint условное
+cloud "СУД AI HUB\nissuer/JWKS" as AiHubIam
+cloud "СУДИР\nissuer/JWKS" as Sudir
+cloud "СУД поверхности\nissuer/JWKS — TBD" as SurfaceIam
 
-    Backend -> Backend : Проверить JWT и роли пользователя
-    Backend -> Backend : Выбрать публичные шаблоны,\nзадекларированные для MCP\nи доступные пользователю
+component "MCP-серверы\nдругих команд" as OtherMcp
 
-    Backend --> MCP : Список разрешённых шаблонов\nс templateId и схемами параметров
+User --> Agent : бизнес-запрос
+Agent --> Core : запрос к tool
 
-    alt Позитивный сценарий: доступные шаблоны найдены
-        MCP -> Registry : Сформировать динамические tools\nдля разрешённых шаблонов
+Core --> McpEndpoint : Streamable HTTP + MCP JSON-RPC\nAI HUB JWT [опционально]\nСУДИР JWT [обязательно]\nSurface JWT [контракт TBD]\nAgentInfo [формат TBD]
 
-        Registry --> MCP : tool-A -> template-A\ntool-B -> template-B
+McpEndpoint --> SecurityAdapter
+SecurityAdapter ..> InboundSecurity : использует библиотеку
 
-        MCP --> Core : tools/list\n[tool-A, tool-B]
+InboundSecurity --> CoreJwtValidator
+InboundSecurity --> SudirJwtValidator
+InboundSecurity --> SurfaceJwtValidator
+InboundSecurity --> AgentInfoResolver
 
-        Core --> Agent : Доступные tools\n[tool-A, tool-B]
-        Agent -> Agent : Выбрать подходящий tool-A\nпо запросу пользователя
-    else У пользователя нет доступных MCP-шаблонов
-        MCP --> Core : tools/list\n[]
-        Core --> Agent : Доступные tools отсутствуют
-        Agent --> User : Сообщить, что подходящие\nинструменты недоступны
-    end
+CoreJwtValidator --> AiHubIam : ключи и параметры проверки
+SudirJwtValidator --> Sudir : ключи и параметры проверки
+SurfaceJwtValidator --> SurfaceIam : ключи и параметры проверки
 
-else Негативный сценарий: JWT отсутствует или невалиден
-    Auth --> MCP : Ошибка аутентификации
-    MCP --> Core : 401 Unauthorized
-    Core --> Agent : Требуется аутентификация
-    Agent --> User : Сообщить об ошибке аутентификации
-end
+CoreJwtValidator --> ContextFactory : core identity / отсутствует
+SudirJwtValidator --> ContextFactory : user identity
+SurfaceJwtValidator --> ContextFactory : surface identity
+AgentInfoResolver --> ContextFactory : agent identity
+ContextFactory --> SecurityAdapter : McpCallerContext
+ContextFactory --> SecurityAudit : обезличенные идентификаторы
 
-== Вызов выбранного tool ==
+SecurityAdapter --> McpProtocol : только валидированный контекст
 
-Agent -> Core : Вызвать tool-A\nс параметрами из запроса
-Core -> MCP : tools/call tool-A\nAuthorization: Bearer JWT
+McpProtocol --> ToolCatalog : tools/list
+ToolCatalog --> AuthorizationEngine : фильтровать tools
 
-MCP -> Auth : Повторно проверить JWT
+McpProtocol --> ToolDispatcher : tools/call
+ToolDispatcher --> AuthorizationEngine : повторно проверить конкретный tool
 
-alt Позитивный сценарий: JWT валиден
-    Auth --> MCP : Пользователь и его роли
+AuthorizationEngine --> PolicyRepository : evaluate(context, tool, action)
+AuthorizationEngine --> ToolCatalog : разрешённый набор
+AuthorizationEngine --> ToolDispatcher : permit / deny
 
-    MCP -> Registry : Найти templateId для tool-A
-    Registry --> MCP : template-A
+ToolCatalog --> BackendClient : получить задекларированные шаблоны
+ToolDispatcher --> BackendClient : выполнить templateId
 
-    MCP -> Backend : Проверить доступность template-A\nили использовать короткий персональный кэш\nAuthorization: Bearer JWT
+BackendClient ..> TokenRelay : выбрать токен для backend
+TokenRelay --> BackendSecurity : Authorization: Bearer <СУДИР JWT>
+BackendSecurity --> TemplatesApi
+BackendSecurity --> QueryApi
 
-    alt Позитивный сценарий: шаблон доступен
-        Backend --> MCP : Доступ разрешён
+OtherMcp ..> SecurityLibrary : подключает как зависимость
 
-        MCP -> Backend : Выполнить template-A\nAuthorization: Bearer JWT
+note top of McpEndpoint
+Имена HTTP-заголовков и способ передачи
+трёх токенов должны быть определены
+отдельным интеграционным контрактом.
 
-        Backend -> Backend : Повторно проверить авторизацию\nна защищённом endpoint
-        Backend --> MCP : resultId / результат выполнения
-
-        MCP --> Core : MCP tool result
-        Core --> Agent : MCP tool result
-        Agent -> Agent : Интерпретировать результат
-        Agent --> User : Человекочитаемый ответ
-    else Негативный сценарий: шаблон больше не доступен
-        Backend --> MCP : Доступ запрещён
-        MCP --> Core : 403 Forbidden
-        Core --> Agent : Tool недоступен пользователю
-        Agent --> User : Сообщить об отсутствии доступа
-    end
-
-else Негативный сценарий: JWT отсутствует или невалиден
-    Auth --> MCP : Ошибка аутентификации
-    MCP --> Core : 401 Unauthorized
-    Core --> Agent : Требуется аутентификация
-    Agent --> User : Сообщить об ошибке аутентификации
-end
-
-note over Core,MCP
-KitAI Core передаёт пользовательский JWT
-при tools/list и tools/call.
-
-Персональный список нельзя
-кэшировать глобально для всех пользователей.
+JWT не передаются в аргументах tool.
 end note
 
-note over User,Agent
-Пользователь не вызывает MCP напрямую.
-С MCP через KitAI Core взаимодействует ИИ-агент.
-Все операции выполняются в контексте пользователя.
+note bottom of ContextFactory
+McpCallerContext содержит проверенные идентичности:
+- userId / роли пользователя;
+- agentId;
+- surfaceId;
+- core/client identity, если AI HUB JWT передан.
+
+Прикладной код не работает с сырыми JWT.
 end note
 
-note over MCP,Backend
-SCSE Backend остаётся источником истины:
-он определяет доступные пользователю шаблоны.
+note bottom of AuthorizationEngine
+SCSE MCP владеет прикладным решением о доступе.
+Библиотека подтверждает идентичности и доставляет токены,
+но не знает SCSE-правил для шаблонов и tools.
+end note
 
-SCSE MCP не хранит копию ролевой модели,
-а создаёт tool для каждого разрешённого templateId.
+note bottom of AgentInfoResolver
+AgentInfo нельзя считать доверенным только потому,
+что клиент прислал agentId. Идентичность агента должна
+быть связана с подписанным JWT либо с аутентифицированным
+каналом KitAI Core. Точный механизм — TBD.
+end note
+
+note bottom of TokenRelay
+В SCSE Backend передаётся только предназначенный ему токен.
+AI HUB JWT и Surface JWT не прокидываются автоматически.
 end note
 
 @enduml

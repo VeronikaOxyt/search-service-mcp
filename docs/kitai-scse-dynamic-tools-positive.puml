@@ -1,70 +1,68 @@
 @startuml
-title SCSE MCP: позитивный сценарий работы динамических tools
+title SCSE MCP: проектная схема аутентификации и авторизации
 
-autonumber
+left to right direction
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+skinparam shadowing false
 
 actor "Пользователь" as User
-participant "ИИ-агент" as Agent
-participant "KitAI Core\nMCP Proxy" as Core
 
-box "Контур SCSE"
-    participant "SCSE MCP" as MCP
-    participant "JWT-аутентификация\nи ролевая модель SCSE" as Auth
-    participant "SCSE Backend" as Backend
-end box
+package "AI HUB" {
+    component "ИИ-агент" as Agent
+    component "KitAI Core\nMCP Proxy" as Core
+}
 
-== Получение персонального списка tools ==
+package "SCSE MCP" {
+    component "Streamable HTTP\n/mcp" as Endpoint
+    component "mcp-security-starter" as SecurityLibrary
+    component "McpCallerContext\nuser + agent + surface + core" as CallerContext
+    component "Проверка прав SCSE\ncontext × tool × action" as Authorization
+    component "Динамические MCP-tools" as Tools
+    component "SCSE Backend Client" as Client
+}
 
-User -> Agent : Сформулировать запрос
-Agent -> Core : Запросить доступные инструменты
-Core -> MCP : tools/list\nAuthorization: Bearer JWT
+package "SCSE Backend" {
+    component "JWT Security" as BackendSecurity
+    component "Шаблоны и выполнение запросов" as BackendApi
+}
 
-MCP -> Auth : Проверить JWT
-Auth --> MCP : Пользователь аутентифицирован\nРоли определены
+cloud "СУД AI HUB" as AiHubIam
+cloud "СУДИР" as Sudir
+cloud "СУД поверхности\nTBD" as SurfaceIam
 
-MCP -> Backend : Получить доступные MCP-шаблоны\nAuthorization: Bearer JWT
-Backend -> Backend : Отобрать публичные шаблоны,\nразрешённые ролями пользователя
-Backend --> MCP : template-A, template-B\n+ схемы параметров
+User --> Agent : запрос
+Agent --> Core
 
-MCP -> MCP : Создать динамический tool\nдля каждого разрешённого шаблона
-MCP --> Core : tools/list\n[tool-A, tool-B]
-Core --> Agent : Доступные tools\n[tool-A, tool-B]
-Agent -> Agent : Выбрать подходящий tool-A\nпо запросу пользователя
+Core --> Endpoint : MCP JSON-RPC\n+ AI HUB JWT [опционально]\n+ СУДИР JWT\n+ Surface JWT [TBD]\n+ AgentInfo [TBD]
 
-== Вызов динамического tool ==
+Endpoint --> SecurityLibrary : принять security-контекст
+SecurityLibrary --> AiHubIam : проверить AI HUB JWT
+SecurityLibrary --> Sudir : проверить СУДИР JWT
+SecurityLibrary --> SurfaceIam : проверить Surface JWT
+SecurityLibrary --> CallerContext : только проверенные идентичности
 
-Agent -> Core : Вызвать tool-A\nс параметрами из запроса
-Core -> MCP : tools/call tool-A + параметры\nAuthorization: Bearer JWT
+CallerContext --> Authorization
+Tools --> Authorization : tools/list — фильтрация\ntools/call — повторная проверка
+Authorization --> Tools : permit / deny
 
-MCP -> Auth : Повторно проверить JWT
-Auth --> MCP : JWT валиден
+Tools --> Client : разрешённый вызов templateId
+Client --> BackendSecurity : Authorization: Bearer <СУДИР JWT>
+BackendSecurity --> BackendApi
 
-MCP -> MCP : Проверить tool-A\nв персональном каталоге\ntool-A -> template-A
-
-MCP -> Backend : Выполнить template-A\nAuthorization: Bearer JWT
-Backend -> Backend : Повторно проверить JWT, роли\nи доступ к template-A
-Backend --> MCP : resultId / результат
-
-MCP --> Core : MCP tool result
-Core --> Agent : MCP tool result
-Agent -> Agent : Интерпретировать результат
-Agent --> User : Человекочитаемый ответ
-
-note over Core,MCP
-JWT передаётся при tools/list и tools/call.
-KitAI получает только разрешённые пользователю tools.
+note bottom of SecurityLibrary
+Общая переиспользуемая библиотека скрывает:
+приём, валидацию, разбор и token relay.
 end note
 
-note over User,Agent
-Пользователь не вызывает MCP напрямую.
-С MCP через KitAI Core взаимодействует ИИ-агент.
-Все операции выполняются в контексте пользователя.
+note bottom of Authorization
+Решение принимает SCSE MCP по совокупности:
+пользователь + агент + поверхность + tool.
 end note
 
-note over MCP,Backend
-Каждый разрешённый шаблон публикуется
-как отдельный динамический MCP-tool.
-SCSE Backend остаётся источником истины по доступу.
+note top of Endpoint
+Точные заголовки и формат AgentInfo — TBD.
+Токены не являются аргументами MCP-tool.
 end note
 
 @enduml
