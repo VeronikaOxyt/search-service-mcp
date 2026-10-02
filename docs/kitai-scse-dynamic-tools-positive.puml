@@ -1,68 +1,79 @@
 @startuml
-title SCSE MCP: проектная схема аутентификации и авторизации
+title SCSE MCP: проверка доступа и вызов динамического tool
 
-left to right direction
-skinparam componentStyle rectangle
-skinparam packageStyle rectangle
-skinparam shadowing false
+autonumber
 
 actor "Пользователь" as User
+participant "ИИ-агент" as Agent
+participant "KitAI Core\nMCP Proxy" as Core
 
-package "AI HUB" {
-    component "ИИ-агент" as Agent
-    component "KitAI Core\nMCP Proxy" as Core
-}
+box "Контур SCSE"
+    participant "SCSE MCP" as MCP
+    participant "Общая библиотека\nmcp-security-starter" as Security
+    participant "Проверка прав SCSE\nuser × agent × surface × tool" as Authorization
+    participant "SCSE Backend" as Backend
+end box
 
-package "SCSE MCP" {
-    component "Streamable HTTP\n/mcp" as Endpoint
-    component "mcp-security-starter" as SecurityLibrary
-    component "McpCallerContext\nuser + agent + surface + core" as CallerContext
-    component "Проверка прав SCSE\ncontext × tool × action" as Authorization
-    component "Динамические MCP-tools" as Tools
-    component "SCSE Backend Client" as Client
-}
+== Получение персонального списка tools ==
 
-package "SCSE Backend" {
-    component "JWT Security" as BackendSecurity
-    component "Шаблоны и выполнение запросов" as BackendApi
-}
+User -> Agent : Сформулировать запрос
+Agent -> Core : Запросить доступные инструменты
 
-cloud "СУД AI HUB" as AiHubIam
-cloud "СУДИР" as Sudir
-cloud "СУД поверхности\nTBD" as SurfaceIam
+Core -> MCP : tools/list\n+ AI HUB JWT [опционально]\n+ СУДИР JWT\n+ Surface JWT [TBD]\n+ AgentInfo [TBD]
 
-User --> Agent : запрос
-Agent --> Core
+MCP -> Security : Проверить security-контекст
+Security -> Security : Валидировать три JWT\nи сформировать McpCallerContext
+Security --> MCP : user + agent + surface + core
 
-Core --> Endpoint : MCP JSON-RPC\n+ AI HUB JWT [опционально]\n+ СУДИР JWT\n+ Surface JWT [TBD]\n+ AgentInfo [TBD]
+MCP -> Authorization : Отобрать разрешённые tools
+Authorization --> MCP : tool-A, tool-B
 
-Endpoint --> SecurityLibrary : принять security-контекст
-SecurityLibrary --> AiHubIam : проверить AI HUB JWT
-SecurityLibrary --> Sudir : проверить СУДИР JWT
-SecurityLibrary --> SurfaceIam : проверить Surface JWT
-SecurityLibrary --> CallerContext : только проверенные идентичности
+MCP --> Core : tools/list\n[tool-A, tool-B]
+Core --> Agent : Доступные tools
+Agent -> Agent : Выбрать tool-A
 
-CallerContext --> Authorization
-Tools --> Authorization : tools/list — фильтрация\ntools/call — повторная проверка
-Authorization --> Tools : permit / deny
+== Вызов динамического tool ==
 
-Tools --> Client : разрешённый вызов templateId
-Client --> BackendSecurity : Authorization: Bearer <СУДИР JWT>
-BackendSecurity --> BackendApi
+Agent -> Core : Вызвать tool-A\nс параметрами
 
-note bottom of SecurityLibrary
-Общая переиспользуемая библиотека скрывает:
-приём, валидацию, разбор и token relay.
-end note
+Core -> MCP : tools/call tool-A\nте же JWT + AgentInfo
 
-note bottom of Authorization
-Решение принимает SCSE MCP по совокупности:
-пользователь + агент + поверхность + tool.
-end note
+MCP -> Security : Повторно проверить контекст
+Security --> MCP : McpCallerContext
 
-note top of Endpoint
+MCP -> Authorization : Проверить доступ к tool-A
+Authorization --> MCP : permit
+
+MCP -> Security : Подготовить запрос в backend
+Security --> MCP : Authorization: Bearer <СУДИР JWT>
+
+MCP -> Backend : Выполнить template-A\nс СУДИР JWT
+Backend -> Backend : Повторно проверить JWT\nи backend-права
+Backend --> MCP : Результат выполнения
+
+MCP --> Core : MCP tool result
+Core --> Agent : Результат tool
+Agent -> Agent : Интерпретировать результат
+Agent --> User : Человекочитаемый ответ
+
+note over Core,MCP
+Три JWT и AgentInfo передаются
+в HTTP security-контексте каждого MCP-запроса.
 Точные заголовки и формат AgentInfo — TBD.
-Токены не являются аргументами MCP-tool.
+end note
+
+note over Security,Authorization
+Библиотека отвечает за приём, проверку и token relay.
+SCSE MCP отвечает за прикладное решение о доступе.
+end note
+
+note over Agent,Security
+AgentInfo должен быть криптографически связан
+с доверенным токеном или каналом KitAI Core.
+end note
+
+note over Security,Backend
+В backend передаётся только СУДИР JWT.
 end note
 
 @enduml
