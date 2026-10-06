@@ -1,0 +1,59 @@
+@startuml
+title SCSE MCP: периодическое обновление каталога tools в KitAI Core
+
+autonumber
+
+participant "KitAI Core" as Core
+
+box "Контур SCSE"
+    participant "SCSE MCP Server" as MCP
+    participant "mcp-security-starter\n<<library>>" as Security
+    participant "scse-mid\n<<SCSE Backend service>>" as ScseMid
+end box
+
+participant "СУД AI HUB" as AiHubIam
+participant "СУДИР" as SudirIam
+
+== Запуск периодического обновления ==
+
+loop Периодически, по внутренней политике KitAI Core
+    Core -> Core : Получить действующие\nAI HUB JWT и СУДИР JWT
+
+    alt Оба JWT доступны и не истекли
+        Core -> MCP : tools/list\nAI HUB JWT\nСУДИР JWT
+
+        MCP -> Security : Проверить AI HUB JWT\nи СУДИР JWT
+        Security -> AiHubIam : Проверить AI HUB JWT\nissuer / audience / signature / exp
+        AiHubIam --> Security : Результат проверки
+        Security -> SudirIam : Проверить СУДИР JWT\nissuer / audience / signature / exp
+        SudirIam --> Security : Результат проверки
+
+        alt Оба JWT валидны
+            Security --> MCP : SecurityContext\nоба JWT успешно проверены
+
+            MCP -> Security : backendAuthorization(scse-mid)
+            Security --> MCP : Authorization: Bearer <СУДИР JWT>
+
+            MCP -> ScseMid : Получить доступные MCP-шаблоны\nAuthorization: Bearer <СУДИР JWT>
+            ScseMid -> ScseMid : Проверить JWT и backend-права
+            ScseMid --> MCP : Доступные пользователю шаблоны
+
+            MCP -> MCP : Сформировать доступный\nдля KitAI Core каталог tools
+            MCP --> Core : tools/list\nкаталог tools и JSON Schema
+
+            Core -> Core : Сохранить или обновить каталог tools
+
+        else JWT невалиден или доступ запрещён
+            Security --> MCP : authentication / authorization error
+            MCP --> Core : 401 / 403 или MCP error
+            Core -> Core : Обработать ошибку обновления
+        end
+
+    else Нет действующего JWT
+        Core -> Core : Не выполнять tools/list
+    end
+end
+
+
+
+@enduml
